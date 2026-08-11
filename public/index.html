@@ -100,6 +100,12 @@
   .content .desc{font-size:13px;color:var(--text-dim);margin-bottom:22px;}
 
   .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+  .painel-unidades-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+  @media (max-width:820px){.painel-unidades-grid{grid-template-columns:1fr;}}
+  .painel-secao{border-left:3px solid var(--amber-dim);padding-left:16px;}
+  .painel-secao-titulo{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;color:var(--amber);margin-bottom:12px;text-transform:uppercase;letter-spacing:.04em;}
+  .painel-secao .stat-row{margin-bottom:14px;}
+  .painel-secao .card{margin-bottom:14px;}
   @media (max-width:820px){.grid-2{grid-template-columns:1fr;}}
 
   .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:18px;transition:border-color .2s ease;animation:fadeUp .3s ease;}
@@ -294,10 +300,8 @@
     <!-- PAINEL -->
     <div id="view-painel" class="view">
       <h2>Painel de motoboys</h2>
-      <div class="desc">Status em tempo real de cada motoboy.</div>
-      <div class="stat-row" id="painel-stats"></div>
-      <div id="painel-proximo-retorno"></div>
-      <div class="moto-grid" id="painel-grid"></div>
+      <div class="desc">Status em tempo real, separado por unidade.</div>
+      <div id="painel-unidades"></div>
     </div>
 
     <!-- PEDIDOS -->
@@ -795,62 +799,75 @@ document.getElementById('btn-trocar-senha').addEventListener('click', async () =
 });
 
 // ---------- Painel ----------
-function renderPainel(){
-  const disponiveis = db.motoboys.filter(m => m.status === 'disponivel').length;
-  const emRota = db.motoboys.filter(m => m.status === 'em_rota').length;
-  const ausentes = db.motoboys.filter(m => m.status === 'ausente').length;
-  document.getElementById('painel-stats').innerHTML = `
-    <div class="stat-box"><div class="val">${disponiveis}</div><div class="lbl">Disponíveis</div></div>
-    <div class="stat-box"><div class="val">${emRota}</div><div class="lbl">Em rota</div></div>
-    <div class="stat-box"><div class="val">${ausentes}</div><div class="lbl">Ausentes</div></div>
-  `;
+function renderSecaoUnidade(chave){
+  const motoboysDaUnidade = db.motoboys.filter(m => (m.unidadeBase || 'matriz') === chave);
+  const disponiveis = motoboysDaUnidade.filter(m => m.status === 'disponivel').length;
+  const emRota = motoboysDaUnidade.filter(m => m.status === 'em_rota').length;
+  const ausentes = motoboysDaUnidade.filter(m => m.status === 'ausente').length;
 
-  // Destaque: próximo motoboy a retornar à loja
-  const rotasComPrevisao = db.rotas.filter(r => r.status === 'em_andamento' && r.previsaoRetornoTs);
-  const destaqueWrap = document.getElementById('painel-proximo-retorno');
-  if (rotasComPrevisao.length === 0){
-    destaqueWrap.innerHTML = '';
-  } else {
+  const rotasComPrevisao = db.rotas.filter(r => {
+    if (r.status !== 'em_andamento' || !r.previsaoRetornoTs) return false;
+    const motoboy = db.motoboys.find(m => m.id === r.motoboyId);
+    return motoboy && (motoboy.unidadeBase || 'matriz') === chave;
+  });
+
+  let destaqueHtml = '';
+  if (rotasComPrevisao.length > 0){
     const proxima = rotasComPrevisao.sort((a,b) => a.previsaoRetornoTs - b.previsaoRetornoTs)[0];
     const motoboy = db.motoboys.find(m => m.id === proxima.motoboyId);
     const c = textoContagem(proxima.previsaoRetornoTs);
     const cor = c.atrasado ? 'var(--danger)' : 'var(--amber)';
-    destaqueWrap.innerHTML = `
-      <div class="card" style="border-color:${cor};background:${c.atrasado ? 'rgba(255,77,77,.07)' : 'rgba(255,122,26,.07)'};margin-bottom:20px;">
-        <h3 style="color:${cor};">${c.atrasado ? 'Motoboy atrasado' : (proxima.destinoFinalLabel ? 'Próxima chegada' : 'Próximo a retornar à loja')}</h3>
+    destaqueHtml = `
+      <div class="card" style="border-color:${cor};background:${c.atrasado ? 'rgba(255,77,77,.07)' : 'rgba(255,122,26,.07)'};">
+        <h3 style="color:${cor};">${c.atrasado ? 'Motoboy atrasado' : (proxima.destinoFinalLabel ? 'Próxima chegada' : 'Próximo a retornar')}</h3>
         <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:10px;">
           <div>
             <div style="font-size:18px;font-weight:600;">${escapeHtml(motoboy ? motoboy.nome : '—')}</div>
-            <div style="font-size:13px;color:var(--text-dim);">${proxima.destinoFinalLabel ? 'Indo para ' + proxima.destinoFinalLabel : 'Voltando para ' + (UNIDADE_LABEL[proxima.unidade] || '—')}</div>
+            <div style="font-size:13px;color:var(--text-dim);">${proxima.destinoFinalLabel ? 'Indo para ' + proxima.destinoFinalLabel : 'Voltando de ' + (UNIDADE_LABEL[proxima.unidade] || '—')}</div>
           </div>
           <div style="text-align:right;">
             <div class="mono" style="font-size:22px;font-weight:600;color:${cor};">${c.texto}</div>
-            <div style="font-size:12px;color:var(--text-dim);">${c.atrasado ? 'previsto para ' + proxima.previsaoRetorno : 'previsto para ' + proxima.previsaoRetorno}</div>
+            <div style="font-size:12px;color:var(--text-dim);">previsto para ${proxima.previsaoRetorno}</div>
           </div>
         </div>
       </div>
     `;
   }
 
-  const grid = document.getElementById('painel-grid');
-  if (db.motoboys.length === 0){
-    grid.innerHTML = `<div class="empty-state">Nenhum motoboy cadastrado ainda.</div>`;
-    return;
-  }
-  grid.innerHTML = db.motoboys.map(m => {
-    const pedidosAtivos = db.pedidos.filter(p => p.motoboyId === m.id && p.status === 'em_rota').length;
-    const rotaAtiva = db.rotas.find(r => r.motoboyId === m.id && r.status === 'em_andamento');
-    const retornoTxt = rotaAtiva && rotaAtiva.previsaoRetorno ? `Retorno previsto ${rotaAtiva.previsaoRetorno}` : (pedidosAtivos > 0 ? pedidosAtivos + ' entrega(s) em andamento' : 'Sem entregas ativas');
-    return `
-      <div class="moto-card">
-        <div class="top">
-          <span class="name">${escapeHtml(m.nome)}</span>
-          <span class="status-badge status-${m.status}">${STATUS_LABEL[m.status]}</span>
-        </div>
-        <div class="sub">${retornoTxt}</div>
+  const gridHtml = motoboysDaUnidade.length === 0
+    ? `<div class="empty-state">Nenhum motoboy registrado na ${UNIDADE_LABEL[chave]} ainda.</div>`
+    : `<div class="moto-grid">${motoboysDaUnidade.map(m => {
+        const pedidosAtivos = db.pedidos.filter(p => p.motoboyId === m.id && p.status === 'em_rota').length;
+        const rotaAtiva = db.rotas.find(r => r.motoboyId === m.id && r.status === 'em_andamento');
+        const retornoTxt = rotaAtiva && rotaAtiva.previsaoRetorno ? `Chegada prevista ${rotaAtiva.previsaoRetorno}` : (pedidosAtivos > 0 ? pedidosAtivos + ' entrega(s) em andamento' : 'Sem entregas ativas');
+        return `
+          <div class="moto-card">
+            <div class="top">
+              <span class="name">${escapeHtml(m.nome)}</span>
+              <span class="status-badge status-${m.status}">${STATUS_LABEL[m.status]}</span>
+            </div>
+            <div class="sub">${retornoTxt}</div>
+          </div>
+        `;
+      }).join('')}</div>`;
+
+  return `
+    <div class="painel-secao">
+      <div class="painel-secao-titulo">${UNIDADE_LABEL[chave]}</div>
+      <div class="stat-row">
+        <div class="stat-box"><div class="val">${disponiveis}</div><div class="lbl">Disponíveis</div></div>
+        <div class="stat-box"><div class="val">${emRota}</div><div class="lbl">Em rota</div></div>
+        <div class="stat-box"><div class="val">${ausentes}</div><div class="lbl">Ausentes</div></div>
       </div>
-    `;
-  }).join('');
+      ${destaqueHtml}
+      ${gridHtml}
+    </div>
+  `;
+}
+
+function renderPainel(){
+  document.getElementById('painel-unidades').innerHTML =
+    `<div class="painel-unidades-grid">${renderSecaoUnidade('matriz')}${renderSecaoUnidade('filial')}</div>`;
 }
 
 // ---------- Pedidos ----------
