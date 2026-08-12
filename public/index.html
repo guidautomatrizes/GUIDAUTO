@@ -121,6 +121,7 @@
   .status-disponivel{background:rgba(95,199,163,.14);color:var(--ok);}
   .status-em_rota{background:rgba(242,169,60,.14);color:var(--amber);}
   .status-ausente{background:rgba(74,83,97,.3);color:var(--text-dim);}
+  .status-almoco{background:#000;color:#fff;border:1px solid var(--amber);font-weight:700;}
   .status-pendente{background:rgba(74,83,97,.3);color:var(--text-dim);}
   .status-entregue{background:rgba(95,199,163,.14);color:var(--ok);}
 
@@ -326,10 +327,12 @@
           <h3>Novo pedido <span style="text-transform:none;font-weight:400;color:var(--text-dim);font-size:11px;">(logística)</span></h3>
           <label>Número da DAV</label>
           <input type="text" id="novo-dav" placeholder="Ex: 10234">
-          <label>Cliente</label>
+          <label>Cliente <span style="text-transform:none;font-weight:400;color:var(--text-dim);">(opcional)</span></label>
           <input type="text" id="novo-cliente" placeholder="Nome do cliente">
           <label>Local de entrega</label>
           <select id="novo-local"></select>
+          <label>Observação <span style="text-transform:none;font-weight:400;color:var(--text-dim);">(opcional — pode preencher depois também)</span></label>
+          <input type="text" id="novo-observacao" placeholder="Ex: Receber">
           <button class="btn-primary" id="btn-novo-pedido">Registrar pedido</button>
           <button class="btn-ghost" id="btn-cancelar-edicao" style="display:none;margin-top:8px;width:100%;">Cancelar edição</button>
           <div id="novo-pedido-msg"></div>
@@ -411,6 +414,13 @@
                 <option value="filial">Filial</option>
               </select>
             </div>
+            <div class="field">
+              <label>Tipo</label>
+              <select id="add-motoboy-tipo">
+                <option value="interno">Interno</option>
+                <option value="terceirizado">Terceirizado</option>
+              </select>
+            </div>
             <button class="btn-primary small" id="btn-add-motoboy">Adicionar</button>
           </div>
         </div>
@@ -437,6 +447,10 @@
             <div class="field">
               <label>Papel</label>
               <select id="add-colab-papel"><option value="vendedor">Vendedor</option><option value="admin">Admin</option></select>
+            </div>
+            <div class="field">
+              <label>Unidade</label>
+              <select id="add-colab-unidade"><option value="matriz">Matriz</option><option value="filial">Filial</option></select>
             </div>
             <button class="btn-primary small" id="btn-add-colab">Adicionar</button>
           </div>
@@ -521,6 +535,11 @@ let currentUser = null; // {id, nome, login, papel} -- em memória, não persist
 function uid(prefix){ return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2,7); }
 function nowTime(){ return new Date().toLocaleString('pt-BR'); }
 function escapeHtml(s){ const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+function nomeCliente(p){
+  if (p.cliente && p.cliente.trim()) return p.cliente;
+  const local = db.locais.find(l => l.id === p.localId);
+  return local ? local.nome : 'Cliente não informado';
+}
 // Retorna quanto falta (ou quanto já passou, negativo) até um horário previsto.
 function textoContagem(ts){
   const diffMin = Math.round((ts - Date.now()) / 60000);
@@ -549,8 +568,8 @@ document.getElementById('btn-fechar-welcome').addEventListener('click', () => {
 async function seedUsuariosIniciais(){
   if (db.usuarios.length === 0){
     db.usuarios.push(
-      { id: uid('user'), nome: 'Vinicios Sobreira', login: 'admin1', senha: 'admin1', papel: 'admin' },
-      { id: uid('user'), nome: 'Gustavo Gomes', login: 'gustavog1', senha: 'gustavog1', papel: 'vendedor' }
+      { id: uid('user'), nome: 'Vinicios Sobreira', login: 'admin1', senha: 'admin1', papel: 'admin', unidade: 'matriz' },
+      { id: uid('user'), nome: 'Gustavo Gomes', login: 'gustavog1', senha: 'gustavog1', papel: 'vendedor', unidade: 'matriz' }
     );
     await saveDB();
   }
@@ -581,7 +600,7 @@ async function saveDB(){
   }catch(e){ console.error('Erro ao salvar', e); }
 }
 
-const STATUS_LABEL = { disponivel:'Disponível', em_rota:'Em rota', ausente:'Ausente', pendente:'Pendente', entregue:'Entregue' };
+const STATUS_LABEL = { disponivel:'Disponível', em_rota:'Em rota', ausente:'Ausente', almoco:'Almoço', pendente:'Pendente', entregue:'Entregue' };
 const UNIDADE_LABEL = { matriz: 'Matriz', filial: 'Filial' };
 
 // =================================================================
@@ -617,6 +636,12 @@ async function calcularRotaOSRM(pontos){
 async function recalcularEstimativaRota(rota){
   const unidadeSaida = db.unidades[rota.unidade];
   const motoboy = db.motoboys.find(m => m.id === rota.motoboyId);
+  rota.terceirizado = motoboy && motoboy.tipo === 'terceirizado';
+  if (rota.terceirizado){
+    // Motoboy terceirizado: fluxo simplificado, sem cálculo automático de rota.
+    rota.distanciaKm = null; rota.duracaoMin = null; rota.previsaoRetorno = null; rota.previsaoRetornoTs = null; rota.destinoFinalLabel = null;
+    return;
+  }
   const chaveDestino = (motoboy && motoboy.unidadeBase) ? motoboy.unidadeBase : rota.unidade;
   const unidadeDestino = db.unidades[chaveDestino];
   const pedidos = rota.pedidoIds.map(pid => db.pedidos.find(p => p.id === pid)).filter(Boolean);
@@ -715,6 +740,7 @@ function enterApp(){
   });
   document.getElementById('card-novo-pedido').style.display = currentUser.papel === 'admin' ? 'block' : 'none';
   document.getElementById('grid-pedidos-top').style.gridTemplateColumns = currentUser.papel === 'admin' ? '' : '1fr';
+  document.getElementById('montar-unidade').value = currentUser.unidade || 'matriz';
   switchView('painel');
   renderAll();
   showWelcomeModal();
@@ -899,8 +925,9 @@ function iniciarEdicaoPedido(pedidoId){
   if (!pedido) return;
   editandoPedidoId = pedidoId;
   document.getElementById('novo-dav').value = pedido.dav;
-  document.getElementById('novo-cliente').value = pedido.cliente;
+  document.getElementById('novo-cliente').value = pedido.cliente || '';
   document.getElementById('novo-local').value = pedido.localId;
+  document.getElementById('novo-observacao').value = pedido.observacao || '';
   document.getElementById('btn-novo-pedido').textContent = 'Salvar edição';
   document.getElementById('btn-cancelar-edicao').style.display = 'inline-block';
   document.getElementById('card-novo-pedido').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -909,6 +936,7 @@ function cancelarEdicaoPedido(){
   editandoPedidoId = null;
   document.getElementById('novo-dav').value = '';
   document.getElementById('novo-cliente').value = '';
+  document.getElementById('novo-observacao').value = '';
   document.getElementById('btn-novo-pedido').textContent = 'Registrar pedido';
   document.getElementById('btn-cancelar-edicao').style.display = 'none';
   setMsg('novo-pedido-msg', '', '');
@@ -945,18 +973,16 @@ document.getElementById('btn-novo-pedido').addEventListener('click', async () =>
   const dav = document.getElementById('novo-dav').value.trim();
   const cliente = document.getElementById('novo-cliente').value.trim();
   const localId = document.getElementById('novo-local').value;
+  const observacao = document.getElementById('novo-observacao').value.trim();
   const msgEl = 'novo-pedido-msg';
-  if (!dav || !cliente || !localId){
-    setMsg(msgEl, 'Preencha a DAV, o cliente e o local.', 'error'); return;
+  if (!dav || !localId){
+    setMsg(msgEl, 'Preencha a DAV e o local.', 'error'); return;
   }
-  const duplicado = db.pedidos.find(p => p.dav === dav && p.id !== editandoPedidoId);
-  if (duplicado){
-    setMsg(msgEl, 'Já existe um pedido com essa DAV.', 'error'); return;
-  }
+  // DAVs podem se repetir (ex: mesma nota em entregas diferentes), então não bloqueamos duplicidade.
 
   if (editandoPedidoId){
     const pedido = db.pedidos.find(p => p.id === editandoPedidoId);
-    pedido.dav = dav; pedido.cliente = cliente; pedido.localId = localId;
+    pedido.dav = dav; pedido.cliente = cliente; pedido.localId = localId; pedido.observacao = observacao;
     await saveDB();
     if (pedido.rotaId){
       const rota = db.rotas.find(r => r.id === pedido.rotaId && r.status === 'em_andamento');
@@ -969,7 +995,7 @@ document.getElementById('btn-novo-pedido').addEventListener('click', async () =>
   }
 
   db.pedidos.push({
-    id: uid('ped'), dav, cliente, localId,
+    id: uid('ped'), dav, cliente, localId, observacao,
     vendedorNome: currentUser.nome,
     status: 'pendente', motoboyId: null, rotaId: null,
     horaSaida: null, horaEntrega: null, criadoEm: nowTime()
@@ -977,6 +1003,7 @@ document.getElementById('btn-novo-pedido').addEventListener('click', async () =>
   await saveDB();
   document.getElementById('novo-dav').value = '';
   document.getElementById('novo-cliente').value = '';
+  document.getElementById('novo-observacao').value = '';
   setMsg(msgEl, 'Pedido registrado como pendente.', 'ok');
   renderAll();
 });
@@ -985,24 +1012,27 @@ document.getElementById('btn-buscar-dav').addEventListener('click', () => {
   const dav = document.getElementById('busca-dav').value.trim();
   const wrap = document.getElementById('busca-dav-result');
   if (!dav){ wrap.innerHTML = ''; return; }
-  const pedido = db.pedidos.find(p => p.dav === dav);
-  if (!pedido){
+  const encontrados = db.pedidos.filter(p => p.dav === dav);
+  if (encontrados.length === 0){
     wrap.innerHTML = `<div class="msg error">Nenhum pedido encontrado com a DAV ${escapeHtml(dav)}.</div>`;
     return;
   }
-  const local = db.locais.find(l => l.id === pedido.localId);
-  const motoboy = db.motoboys.find(m => m.id === pedido.motoboyId);
-  wrap.innerHTML = `
-    <div class="list-item" style="margin-top:12px;">
-      <div class="info">
-        <div class="t1">DAV ${escapeHtml(pedido.dav)} — ${escapeHtml(pedido.cliente)}</div>
-        <div class="t2">${local ? escapeHtml(local.nome) : '—'} · Vendedor: ${escapeHtml(pedido.vendedorNome)}</div>
-        <div class="t2">${motoboy ? 'Motoboy: ' + escapeHtml(motoboy.nome) : 'Ainda sem motoboy atribuído'}</div>
-        <div class="t2">${pedido.horaSaida ? 'Saiu em: ' + pedido.horaSaida : ''}${pedido.horaEntrega ? ' · Entregue em: ' + pedido.horaEntrega : ''}</div>
+  wrap.innerHTML = encontrados.map(pedido => {
+    const local = db.locais.find(l => l.id === pedido.localId);
+    const motoboy = db.motoboys.find(m => m.id === pedido.motoboyId);
+    return `
+      <div class="list-item" style="margin-top:12px;">
+        <div class="info">
+          <div class="t1">DAV ${escapeHtml(pedido.dav)} — ${escapeHtml(nomeCliente(pedido))}</div>
+          <div class="t2">${local ? escapeHtml(local.nome) : '—'} · Vendedor: ${escapeHtml(pedido.vendedorNome)}</div>
+          <div class="t2">${motoboy ? 'Motoboy: ' + escapeHtml(motoboy.nome) : 'Ainda sem motoboy atribuído'}</div>
+          <div class="t2">${pedido.horaSaida ? 'Saiu em: ' + pedido.horaSaida : ''}${pedido.horaEntrega ? ' · Entregue em: ' + pedido.horaEntrega : ''}</div>
+          ${pedido.observacao ? `<div class="t2" style="color:var(--amber);">Obs: ${escapeHtml(pedido.observacao)}</div>` : ''}
+        </div>
+        <span class="status-badge status-${pedido.status}">${STATUS_LABEL[pedido.status]}</span>
       </div>
-      <span class="status-badge status-${pedido.status}">${STATUS_LABEL[pedido.status]}</span>
-    </div>
-  `;
+    `;
+  }).join('');
 });
 
 document.getElementById('filtro-status').addEventListener('change', renderPedidosTabela);
@@ -1024,17 +1054,18 @@ function renderPedidosTabela(){
   const isAdmin = currentUser.papel === 'admin';
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>DAV</th><th>Cliente</th><th>Motoboy</th><th>Status</th><th>Saída</th><th>Entrega</th>${isAdmin ? '<th>Ações</th>' : ''}</tr></thead>
+      <thead><tr><th>DAV</th><th>Cliente</th><th>Motoboy</th><th>Status</th><th>Saída</th><th>Entrega</th><th>Obs.</th>${isAdmin ? '<th>Ações</th>' : ''}</tr></thead>
       <tbody>
         ${lista.map(p => {
           const motoboy = db.motoboys.find(m => m.id === p.motoboyId);
           return `<tr>
             <td class="mono">${escapeHtml(p.dav)}</td>
-            <td>${escapeHtml(p.cliente)}</td>
+            <td>${escapeHtml(nomeCliente(p))}</td>
             <td>${motoboy ? escapeHtml(motoboy.nome) : '—'}</td>
             <td><span class="status-badge status-${p.status}">${STATUS_LABEL[p.status]}</span></td>
             <td class="mono">${p.horaSaida || '—'}</td>
             <td class="mono">${p.horaEntrega || '—'}</td>
+            <td style="color:var(--amber);">${p.observacao ? escapeHtml(p.observacao) : '—'}</td>
             ${isAdmin ? `<td class="row-actions">
               <button class="btn-ghost" data-editar-pedido="${p.id}">Editar</button>
               <button class="btn-danger" data-apagar-pedido="${p.id}">Apagar</button>
@@ -1068,7 +1099,7 @@ function renderMontarRota(){
     return `
       <div class="checkbox-row">
         <input type="checkbox" value="${p.id}" class="chk-pedido-pendente" ${marcados.has(p.id) ? 'checked' : ''}>
-        <span>DAV <b class="mono">${escapeHtml(p.dav)}</b> — ${escapeHtml(p.cliente)} (${local ? escapeHtml(local.nome) : '—'})</span>
+        <span>DAV <b class="mono">${escapeHtml(p.dav)}</b> — ${escapeHtml(nomeCliente(p))} (${local ? escapeHtml(local.nome) : '—'})</span>
       </div>
     `;
   }).join('');
@@ -1114,19 +1145,21 @@ function renderRotasAndamento(){
     wrap.innerHTML = `<div class="empty-state">Nenhuma rota em andamento.</div>`;
     return;
   }
-  wrap.innerHTML = rotas.map(r => {
+  const renderCard = (r) => {
     const motoboy = db.motoboys.find(m => m.id === r.motoboyId);
     const pedidos = r.pedidoIds.map(pid => db.pedidos.find(p => p.id === pid)).filter(Boolean);
     const todasEntregues = pedidos.length > 0 && pedidos.every(p => p.status === 'entregue');
     const outrosMotoboys = db.motoboys.filter(m => m.id !== r.motoboyId);
-    const estimativaHtml = r.distanciaKm != null
-      ? (() => {
-          const c = textoContagem(r.previsaoRetornoTs);
-          const cor = c.atrasado ? 'var(--danger)' : 'var(--amber)';
-          const rotulo = r.destinoFinalLabel ? ('chegada em ' + r.destinoFinalLabel + ' prevista ' + r.previsaoRetorno) : ('retorno previsto ' + r.previsaoRetorno);
-          return `<span class="meta mono" style="color:${cor};">~${r.distanciaKm.toFixed(1)} km · ${rotulo} · ${c.texto}</span>`;
-        })()
-      : `<span class="meta" style="color:var(--text-dim);">Estimativa indisponível (verifique os endereços cadastrados)</span>`;
+    const estimativaHtml = r.terceirizado
+      ? `<span class="meta" style="color:var(--text-dim);">Motoboy terceirizado — sem estimativa automática</span>`
+      : r.distanciaKm != null
+        ? (() => {
+            const c = textoContagem(r.previsaoRetornoTs);
+            const cor = c.atrasado ? 'var(--danger)' : 'var(--amber)';
+            const rotulo = r.destinoFinalLabel ? ('chegada em ' + r.destinoFinalLabel + ' prevista ' + r.previsaoRetorno) : ('retorno previsto ' + r.previsaoRetorno);
+            return `<span class="meta mono" style="color:${cor};">~${r.distanciaKm.toFixed(1)} km · ${rotulo} · ${c.texto}</span>`;
+          })()
+        : `<span class="meta" style="color:var(--text-dim);">Estimativa indisponível (verifique os endereços cadastrados)</span>`;
     const despachadaPor = `<span class="status-badge status-em_rota" style="margin-left:6px;">Despachado pela ${UNIDADE_LABEL[r.unidade] || '—'}</span>`;
     return `
       <div class="route-card">
@@ -1141,8 +1174,9 @@ function renderRotasAndamento(){
           return `
             <div class="pedido-row">
               <div class="info">
-                <b class="mono">${escapeHtml(p.dav)}</b> — ${escapeHtml(p.cliente)} (${local ? escapeHtml(local.nome) : '—'})
+                <b class="mono">${escapeHtml(p.dav)}</b> — ${escapeHtml(nomeCliente(p))} (${local ? escapeHtml(local.nome) : '—'})
                 <span class="status-badge status-${p.status}" style="margin-left:6px;">${STATUS_LABEL[p.status]}</span>
+                ${p.observacao ? `<div style="font-size:11px;color:var(--amber);margin-top:3px;">Obs: ${escapeHtml(p.observacao)}</div>` : ''}
               </div>
               ${p.status !== 'entregue' ? `
                 <button class="btn-ok" data-entregar="${p.id}">Marcar entregue</button>
@@ -1158,7 +1192,17 @@ function renderRotasAndamento(){
         ${todasEntregues ? `<button class="btn-primary small" data-concluir="${r.id}" style="margin-top:8px;">Concluir rota</button>` : ''}
       </div>
     `;
-  }).join('');
+  };
+
+  const rotasMatriz = rotas.filter(r => r.unidade === 'matriz');
+  const rotasFilial = rotas.filter(r => r.unidade === 'filial');
+  const secao = (titulo, lista) => `
+    <div class="painel-secao">
+      <div class="painel-secao-titulo">${titulo}</div>
+      ${lista.length === 0 ? `<div class="empty-state">Nenhuma rota em andamento despachada pela ${titulo.toLowerCase()}.</div>` : lista.map(renderCard).join('')}
+    </div>
+  `;
+  wrap.innerHTML = `<div class="painel-unidades-grid">${secao('Matriz', rotasMatriz)}${secao('Filial', rotasFilial)}</div>`;
 
   wrap.querySelectorAll('[data-entregar]').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -1291,8 +1335,9 @@ function renderRotasConcluidas(){
 document.getElementById('btn-add-motoboy').addEventListener('click', async () => {
   const nome = document.getElementById('add-motoboy-nome').value.trim();
   const unidadeBase = document.getElementById('add-motoboy-unidade').value;
+  const tipo = document.getElementById('add-motoboy-tipo').value;
   if (!nome) return;
-  db.motoboys.push({ id: uid('moto'), nome, status: 'disponivel', unidadeBase });
+  db.motoboys.push({ id: uid('moto'), nome, status: 'disponivel', unidadeBase, tipo });
   await saveDB();
   document.getElementById('add-motoboy-nome').value = '';
   renderAll();
@@ -1305,15 +1350,17 @@ function renderCadastroMotoboys(){
   }
   wrap.innerHTML = db.motoboys.map(m => {
     const emRota = m.status === 'em_rota';
+    const terceirizado = m.tipo === 'terceirizado';
     return `
       <div class="list-item">
         <div class="info">
-          <div class="t1">${escapeHtml(m.nome)}</div>
+          <div class="t1">${escapeHtml(m.nome)} ${terceirizado ? '<span class="status-badge status-ausente" style="margin-left:4px;">Terceirizado</span>' : ''}</div>
           <div class="t2"><span class="status-badge status-${m.status}">${STATUS_LABEL[m.status]}</span> <span style="color:var(--text-dim);">registrado na ${UNIDADE_LABEL[m.unidadeBase] || 'Matriz'}</span></div>
         </div>
         <div class="row-actions">
           ${!emRota ? `
             <button class="btn-ok" data-set-status="${m.id}" data-status="disponivel">Disponível</button>
+            <button class="btn-ghost" data-set-status="${m.id}" data-status="almoco">Almoço</button>
             <button class="btn-ghost" data-set-status="${m.id}" data-status="ausente">Ausente</button>
           ` : `<span class="t2" style="color:var(--text-dim);font-size:11px;">Finalize a rota para alterar</span>`}
           <button class="btn-danger" data-remove-motoboy="${m.id}">Remover</button>
@@ -1393,10 +1440,11 @@ document.getElementById('btn-add-colab').addEventListener('click', async () => {
   const login = document.getElementById('add-colab-login').value.trim();
   const senha = document.getElementById('add-colab-senha').value;
   const papel = document.getElementById('add-colab-papel').value;
+  const unidade = document.getElementById('add-colab-unidade').value;
   const msgEl = 'add-colab-msg';
   if (!nome || !login || !senha){ setMsg(msgEl, 'Preencha todos os campos.', 'error'); return; }
   if (db.usuarios.find(u => u.login === login)){ setMsg(msgEl, 'Já existe um usuário com esse login.', 'error'); return; }
-  db.usuarios.push({ id: uid('user'), nome, login, senha, papel });
+  db.usuarios.push({ id: uid('user'), nome, login, senha, papel, unidade });
   await saveDB();
   document.getElementById('add-colab-nome').value = '';
   document.getElementById('add-colab-login').value = '';
@@ -1410,7 +1458,7 @@ function renderCadastroColaboradores(){
     <div class="list-item">
       <div class="info">
         <div class="t1">${escapeHtml(u.nome)} <span class="mono" style="color:var(--text-dim);font-size:11px;">@${escapeHtml(u.login)}</span></div>
-        <div class="t2">${u.papel === 'admin' ? 'Administrador' : 'Vendedor'}</div>
+        <div class="t2">${u.papel === 'admin' ? 'Administrador' : 'Vendedor'} · ${UNIDADE_LABEL[u.unidade] || 'Matriz'}</div>
       </div>
       ${u.id !== currentUser.id ? `<button class="btn-danger" data-remove-user="${u.id}">Remover</button>` : `<span class="t2" style="font-size:11px;">Você</span>`}
     </div>
