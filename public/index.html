@@ -6,6 +6,7 @@
 <title>Painel de Entregas</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
     --bg:#0a0a0c; --panel:#141416; --panel-2:#1c1c1f; --border:#2a2a2e; --line:#38383d;
@@ -27,18 +28,41 @@
 
   /* ---------- Login / setup ---------- */
   #login-screen{
-    height:100vh; display:flex; align-items:center; justify-content:center; padding:20px;
+    min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px;
     background:radial-gradient(circle at 50% 0%, #1a1410 0%, var(--bg) 55%);
   }
-  .login-card{
-    width:100%; max-width:380px; background:var(--panel); border:1px solid var(--border);
-    border-radius:12px; padding:28px 26px;
+  .login-shell{
+    width:100%; max-width:860px; min-height:560px; background:var(--panel); border:1px solid var(--border);
+    border-radius:26px; display:flex; overflow:hidden; box-shadow:0 30px 80px rgba(0,0,0,.5);
     animation:fadeUp .4s ease;
   }
-  .login-logo{ display:block; height:88px; margin:0 auto 20px auto; }
-  .login-card .kicker{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);margin-bottom:6px;text-align:center;}
-  .login-card h1{font-size:22px;margin-bottom:4px;text-align:center;}
-  .login-card .sub{font-size:13px;color:var(--text-dim);margin-bottom:20px;line-height:1.5;text-align:center;}
+  @media (max-width:760px){ .login-shell{ flex-direction:column; min-height:0; } }
+
+  .login-left{
+    flex:1; position:relative; background:radial-gradient(circle at 30% 20%, #1f1108 0%, #0a0a0c 70%);
+    border-radius:26px 90px 90px 26px; margin:14px 0 14px 14px;
+    display:flex; flex-direction:column; justify-content:flex-end; padding:26px; overflow:hidden;
+    min-height:520px;
+  }
+  @media (max-width:760px){ .login-left{ margin:14px 14px 0 14px; border-radius:26px; min-height:220px; } }
+
+  .left-vector{ position:absolute; opacity:.16; stroke:var(--amber); fill:none; stroke-width:1.4; }
+  .left-vector-gear{ top:-30px; right:-40px; width:220px; height:220px; transform:rotate(10deg); }
+  .left-vector-wrench{ bottom:120px; left:-30px; width:180px; height:90px; transform:rotate(-18deg); }
+  .left-vector-piston{ top:40%; right:-50px; width:160px; height:160px; opacity:.12; }
+
+  .left-logo{ position:relative; z-index:1; margin-bottom:auto; width:100%; max-width:230px; }
+  .left-logo svg{ width:100%; height:auto; }
+
+  .left-quote{ position:relative; z-index:1; }
+  .left-quote p{ color:#fff; font-size:15px; line-height:1.6; font-style:italic; margin:0 0 8px 0; }
+  .left-quote .author{ font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--amber); }
+
+  .login-right{ flex:1; padding:44px 42px; display:flex; flex-direction:column; justify-content:center; }
+  @media (max-width:760px){ .login-right{ padding:32px 28px; } }
+  .login-right .kicker{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);margin-bottom:8px;}
+  .login-right h1{font-size:28px;margin-bottom:6px;}
+  .login-right .sub{font-size:13px;color:var(--text-dim);margin-bottom:20px;line-height:1.5;}
   @keyframes fadeUp{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:translateY(0); } }
   .warn-banner{
     font-size:12px; color:#f0c48a; background:rgba(242,169,60,.08); border:1px solid rgba(242,169,60,.28);
@@ -47,7 +71,7 @@
 
   label{display:block;font-size:12px;font-weight:600;color:var(--text-dim);margin:12px 0 6px 0;text-transform:uppercase;letter-spacing:.05em;}
   label:first-of-type{margin-top:0;}
-  input[type=text],input[type=password],select{
+  input[type=text],input[type=password],input[type=month],select{
     width:100%; background:var(--panel-2); border:1px solid var(--line); color:var(--text);
     padding:10px 11px; border-radius:6px; font-family:'Inter',sans-serif; font-size:14px; outline:none;
     transition:border-color .15s ease, box-shadow .15s ease;
@@ -80,7 +104,7 @@
   .sidenav{background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;}
   @media (max-width:820px){ .sidenav{border-right:none;border-bottom:1px solid var(--border);} }
   .sidenav .brand{padding:18px 18px 14px 18px;border-bottom:1px solid var(--border);}
-  .sidenav-logo{ height:58px; margin-bottom:12px; }
+  .sidenav-logo{ height:48px; width:auto; margin-bottom:12px; }
   .sidenav .brand .kicker{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);margin-bottom:5px;}
   .sidenav .brand h1{font-size:18px;}
   .navlist{list-style:none;margin:0;padding:10px;flex:1;}
@@ -143,7 +167,8 @@
   th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-dim);padding:8px 10px;border-bottom:1px solid var(--border);}
   td{padding:9px 10px;border-bottom:1px solid var(--border);}
   tr:last-child td{border-bottom:none;}
-  .row-actions{display:flex;gap:6px;flex-wrap:wrap;}
+  .row-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+  .row-actions select{width:auto;padding:6px 8px;font-size:12px;}
 
   .list-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;margin-bottom:8px;transition:border-color .15s ease;}
   .list-item:hover{border-color:var(--text-dim);}
@@ -235,32 +260,71 @@
 
 <!-- ================= LOGIN / SETUP ================= -->
 <div id="login-screen">
-  <div class="login-card">
-    <img src="/logo.jpg" alt="Guidauto Peças" class="login-logo">
-    <div class="kicker">Sistema de Entregas</div>
-    <h1 id="login-title">Entrar</h1>
-    <div class="sub" id="login-sub">Acesse com seu login e senha.</div>
-    <div class="warn-banner">Protótipo de demonstração: os logins aqui não usam criptografia real. Não cadastre senhas que você usa em outros lugares.</div>
+  <div class="login-shell">
+    <div class="login-left">
+      <svg class="left-vector left-vector-gear" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="100" cy="100" r="55"/><circle cx="100" cy="100" r="22"/>
+        <g>
+          <rect x="92" y="4" width="16" height="30" rx="3"/><rect x="92" y="166" width="16" height="30" rx="3"/>
+          <rect x="4" y="92" width="30" height="16" rx="3"/><rect x="166" y="92" width="30" height="16" rx="3"/>
+          <rect x="92" y="4" width="16" height="30" rx="3" transform="rotate(45 100 100)"/>
+          <rect x="92" y="4" width="16" height="30" rx="3" transform="rotate(135 100 100)"/>
+          <rect x="92" y="4" width="16" height="30" rx="3" transform="rotate(225 100 100)"/>
+          <rect x="92" y="4" width="16" height="30" rx="3" transform="rotate(315 100 100)"/>
+        </g>
+      </svg>
+      <svg class="left-vector left-vector-wrench" viewBox="0 0 220 100" xmlns="http://www.w3.org/2000/svg">
+        <path d="M18,50 a20,20 0 1,1 28,18 L150,10 a16,16 0 1,0 -14,-14 L18,50 a20,20 0 0,1 0,0 Z"/>
+        <line x1="46" y1="68" x2="150" y2="10"/>
+      </svg>
+      <svg class="left-vector left-vector-piston" viewBox="0 0 160 260" xmlns="http://www.w3.org/2000/svg">
+        <rect x="45" y="10" width="70" height="60" rx="8"/>
+        <line x1="60" y1="20" x2="60" y2="60"/><line x1="80" y1="20" x2="80" y2="60"/><line x1="100" y1="20" x2="100" y2="60"/>
+        <rect x="65" y="70" width="30" height="90" rx="4"/>
+        <line x1="80" y1="90" x2="30" y2="210"/><line x1="80" y1="90" x2="130" y2="210"/>
+        <circle cx="80" cy="230" r="26"/>
+      </svg>
 
-    <div id="setup-block" style="display:none;">
-      <label>Seu nome</label>
-      <input type="text" id="setup-nome" placeholder="Nome do primeiro administrador">
-      <label>Login</label>
-      <input type="text" id="setup-login" placeholder="Ex: admin1">
-      <label>Senha</label>
-      <input type="password" id="setup-senha" placeholder="Crie uma senha">
-      <button class="btn-primary" id="btn-setup">Criar administrador</button>
+      <div class="left-logo">
+        <svg viewBox="0 0 320 110" xmlns="http://www.w3.org/2000/svg">
+          <path d="M20,58 A140,50 0 0 1 300,48" stroke="var(--amber)" stroke-width="6" fill="none" stroke-linecap="round"/>
+          <text x="160" y="62" text-anchor="middle" font-family="'Space Grotesk',sans-serif" font-weight="700" font-size="38" fill="#fff" letter-spacing="-1">guidauto</text>
+          <text x="160" y="84" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="600" font-size="13" fill="var(--amber)" letter-spacing="5">AUTO PEÇAS</text>
+        </svg>
+      </div>
+
+      <div class="left-quote">
+        <p id="login-quote-text">"Não importa quão lentamente você vá, desde que você não pare."</p>
+        <div class="author" id="login-quote-author">— Confúcio</div>
+      </div>
     </div>
 
-    <div id="login-block" style="display:none;">
-      <label>Login</label>
-      <input type="text" id="login-login" placeholder="Seu login">
-      <label>Senha</label>
-      <input type="password" id="login-senha" placeholder="Sua senha">
-      <button class="btn-primary" id="btn-login">Entrar</button>
-    </div>
+    <div class="login-right">
+      <div class="kicker">Sistema de Entregas</div>
+      <h1 id="login-title">Vamos começar</h1>
+      <div class="sub" id="login-sub">Acesse com seu login e senha.</div>
+      <div class="warn-banner">Protótipo de demonstração: os logins aqui não usam criptografia real. Não cadastre senhas que você usa em outros lugares.</div>
 
-    <div id="login-msg"></div>
+      <div id="setup-block" style="display:none;">
+        <label>Seu nome</label>
+        <input type="text" id="setup-nome" placeholder="Nome do primeiro administrador">
+        <label>Login</label>
+        <input type="text" id="setup-login" placeholder="Ex: admin1">
+        <label>Senha</label>
+        <input type="password" id="setup-senha" placeholder="Crie uma senha">
+        <button class="btn-primary" id="btn-setup">Criar administrador</button>
+      </div>
+
+      <div id="login-block" style="display:none;">
+        <label>Login</label>
+        <input type="text" id="login-login" placeholder="Seu login">
+        <label>Senha</label>
+        <input type="password" id="login-senha" placeholder="Sua senha">
+        <button class="btn-primary" id="btn-login">Entrar</button>
+      </div>
+
+      <div id="login-msg"></div>
+    </div>
   </div>
 </div>
 
@@ -268,6 +332,7 @@
 <div class="modal-overlay" id="welcome-modal">
   <div class="modal-card">
     <div class="kicker">Guidauto Peças</div>
+
     <h2>Bem-vindo(a), colaborador da família Guidauto Peças!</h2>
     <div class="quote" id="welcome-quote"></div>
     <div class="author" id="welcome-author"></div>
@@ -279,7 +344,11 @@
 <div id="app">
   <div class="sidenav">
     <div class="brand">
-      <img src="/logo.jpg" alt="Guidauto Peças" class="sidenav-logo">
+      <svg class="sidenav-logo" viewBox="0 0 320 110" xmlns="http://www.w3.org/2000/svg">
+        <path d="M20,58 A140,50 0 0 1 300,48" stroke="var(--amber)" stroke-width="6" fill="none" stroke-linecap="round"/>
+        <text x="160" y="62" text-anchor="middle" font-family="'Space Grotesk',sans-serif" font-weight="700" font-size="38" fill="#fff" letter-spacing="-1">guidauto</text>
+        <text x="160" y="84" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="600" font-size="13" fill="var(--amber)" letter-spacing="5">AUTO PEÇAS</text>
+      </svg>
       <div class="kicker">Sistema de Entregas</div>
       <h1>Painel</h1>
     </div>
@@ -288,6 +357,7 @@
       <li data-view="pedidos">Pedidos / DAVs</li>
       <li data-view="rotas" data-admin-only="1">Rotas</li>
       <li data-view="cadastros" data-admin-only="1">Cadastros</li>
+      <li data-view="relatorios" data-admin-only="1">Relatórios</li>
       <li data-view="perfil">Perfil</li>
     </ul>
     <div class="userbox">
@@ -494,6 +564,19 @@
           <button class="btn-primary small" id="btn-salvar-config" style="margin-top:14px;">Salvar ajustes</button>
           <div id="config-msg"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- RELATÓRIOS -->
+    <div id="view-relatorios" class="view" style="display:none;">
+      <h2>Relatórios</h2>
+      <div class="desc">Baixe uma planilha com as entregas de um período, pronta pra abrir no Excel ou no Google Sheets.</div>
+      <div class="card" style="max-width:460px;">
+        <h3>Exportar entregas</h3>
+        <label>Mês</label>
+        <input type="month" id="relatorio-mes">
+        <button class="btn-primary" id="btn-exportar-relatorio" style="margin-top:14px;">Baixar planilha (.xlsx)</button>
+        <div id="relatorio-msg"></div>
       </div>
     </div>
 
@@ -808,7 +891,61 @@ function renderAll(){
   renderCadastroColaboradores();
   renderCadastroUnidades();
   renderPerfil();
+  initRelatorioMesPadrao();
 }
+
+// ---------- Relatórios ----------
+function initRelatorioMesPadrao(){
+  const input = document.getElementById('relatorio-mes');
+  if (input && !input.value){
+    const agora = new Date();
+    input.value = agora.getFullYear() + '-' + String(agora.getMonth() + 1).padStart(2, '0');
+  }
+}
+function pedidoNoMes(p, anoMes){
+  if (!p.criadoEm) return false;
+  const m = p.criadoEm.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if (!m) return false;
+  const chave = m[3] + '-' + m[2];
+  return chave === anoMes;
+}
+document.getElementById('btn-exportar-relatorio').addEventListener('click', () => {
+  const anoMes = document.getElementById('relatorio-mes').value;
+  const msgEl = 'relatorio-msg';
+  if (!anoMes){ setMsg(msgEl, 'Escolha um mês.', 'error'); return; }
+  const pedidosDoMes = db.pedidos.filter(p => pedidoNoMes(p, anoMes));
+  if (pedidosDoMes.length === 0){ setMsg(msgEl, 'Nenhuma entrega registrada nesse mês.', 'error'); return; }
+
+  const linhas = pedidosDoMes.map(p => {
+    const local = db.locais.find(l => l.id === p.localId);
+    const motoboy = db.motoboys.find(m => m.id === p.motoboyId);
+    const rota = db.rotas.find(r => r.id === p.rotaId);
+    return {
+      'DAV': p.dav,
+      'Cliente': nomeCliente(p),
+      'Local': local ? local.nome : '',
+      'Endereço': local ? local.endereco : '',
+      'Região': local ? (local.regiao || '') : '',
+      'Motoboy': motoboy ? motoboy.nome : '',
+      'Unidade': rota ? (UNIDADE_LABEL[rota.unidade] || '') : '',
+      'Status': STATUS_LABEL[p.status] || p.status,
+      'Vendedor/Logística': p.vendedorNome || '',
+      'Criado em': p.criadoEm || '',
+      'Hora de saída': p.horaSaida || '',
+      'Hora de entrega': p.horaEntrega || '',
+      'Observação': p.observacao || ''
+    };
+  });
+
+  const planilha = XLSX.utils.json_to_sheet(linhas);
+  planilha['!cols'] = [
+    {wch:10},{wch:22},{wch:20},{wch:30},{wch:16},{wch:18},{wch:9},{wch:12},{wch:20},{wch:20},{wch:20},{wch:20},{wch:24}
+  ];
+  const livro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(livro, planilha, 'Entregas');
+  XLSX.writeFile(livro, `entregas-${anoMes}.xlsx`);
+  setMsg(msgEl, pedidosDoMes.length + ' entrega(s) exportada(s).', 'ok');
+});
 
 // ---------- Perfil ----------
 function renderPerfil(){
@@ -1372,11 +1509,12 @@ function renderCadastroMotoboys(){
   wrap.innerHTML = db.motoboys.map(m => {
     const emRota = m.status === 'em_rota';
     const terceirizado = m.tipo === 'terceirizado';
+    const unidadeAtual = m.unidadeBase || 'matriz';
     return `
       <div class="list-item">
         <div class="info">
           <div class="t1">${escapeHtml(m.nome)} ${terceirizado ? '<span class="status-badge status-ausente" style="margin-left:4px;">Terceirizado</span>' : ''}</div>
-          <div class="t2"><span class="status-badge status-${m.status}">${STATUS_LABEL[m.status]}</span> <span style="color:var(--text-dim);">registrado na ${UNIDADE_LABEL[m.unidadeBase] || 'Matriz'}</span></div>
+          <div class="t2"><span class="status-badge status-${m.status}">${STATUS_LABEL[m.status]}</span></div>
         </div>
         <div class="row-actions">
           ${!emRota ? `
@@ -1384,6 +1522,10 @@ function renderCadastroMotoboys(){
             <button class="btn-ghost" data-set-status="${m.id}" data-status="almoco">Almoço</button>
             <button class="btn-ghost" data-set-status="${m.id}" data-status="ausente">Ausente</button>
           ` : `<span class="t2" style="color:var(--text-dim);font-size:11px;">Finalize a rota para alterar</span>`}
+          <select data-set-unidade="${m.id}" ${emRota ? 'disabled' : ''} title="Unidade em que está trabalhando hoje">
+            <option value="matriz" ${unidadeAtual === 'matriz' ? 'selected' : ''}>Trabalhando na Matriz</option>
+            <option value="filial" ${unidadeAtual === 'filial' ? 'selected' : ''}>Trabalhando na Filial</option>
+          </select>
           <button class="btn-danger" data-remove-motoboy="${m.id}">Remover</button>
         </div>
       </div>
@@ -1393,6 +1535,13 @@ function renderCadastroMotoboys(){
     btn.addEventListener('click', async () => {
       const m = db.motoboys.find(x => x.id === btn.dataset.setStatus);
       m.status = btn.dataset.status;
+      await saveDB(); renderAll();
+    });
+  });
+  wrap.querySelectorAll('[data-set-unidade]').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      const m = db.motoboys.find(x => x.id === sel.dataset.setUnidade);
+      m.unidadeBase = sel.value;
       await saveDB(); renderAll();
     });
   });
