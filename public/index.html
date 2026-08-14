@@ -432,7 +432,15 @@
           <div class="inline-form">
             <div class="field"><label>Nome do local</label><input type="text" id="add-local-nome" placeholder="Ex: Depósito Norte"></div>
             <div class="field"><label>Endereço</label><input type="text" id="add-local-endereco" placeholder="Rua, número, bairro"></div>
+            <div class="field"><label>Região</label><input type="text" id="add-local-regiao" placeholder="Ex: Zona Norte, Centro..." list="regioes-existentes"></div>
+            <datalist id="regioes-existentes"></datalist>
             <button class="btn-primary small" id="btn-add-local">Adicionar</button>
+          </div>
+        </div>
+        <div class="inline-form" style="margin-bottom:14px;">
+          <div class="field">
+            <label>Filtrar por região</label>
+            <select id="filtro-regiao-local"><option value="todas">Todas</option></select>
           </div>
         </div>
         <div id="lista-locais"></div>
@@ -899,11 +907,24 @@ function renderPainel(){
 // ---------- Pedidos ----------
 function renderLocaisSelect(){
   const sel = document.getElementById('novo-local');
+  const valorAtual = sel.value;
   if (db.locais.length === 0){
     sel.innerHTML = `<option value="">Cadastre um local em Cadastros</option>`;
     return;
   }
-  sel.innerHTML = db.locais.map(l => `<option value="${l.id}">${escapeHtml(l.nome)} — ${escapeHtml(l.endereco)}</option>`).join('');
+  const grupos = {};
+  db.locais.forEach(l => {
+    const chave = (l.regiao || '').trim() || 'Sem região definida';
+    if (!grupos[chave]) grupos[chave] = [];
+    grupos[chave].push(l);
+  });
+  const chavesOrdenadas = Object.keys(grupos).sort((a,b) => a === 'Sem região definida' ? 1 : b === 'Sem região definida' ? -1 : a.localeCompare(b));
+  sel.innerHTML = chavesOrdenadas.map(chave => `
+    <optgroup label="${escapeHtml(chave)}">
+      ${grupos[chave].map(l => `<option value="${l.id}">${escapeHtml(l.nome)} — ${escapeHtml(l.endereco)}</option>`).join('')}
+    </optgroup>
+  `).join('');
+  if (valorAtual && db.locais.some(l => l.id === valorAtual)) sel.value = valorAtual;
 }
 function renderMotoboyFiltro(){
   const sel = document.getElementById('filtro-motoboy');
@@ -1389,6 +1410,7 @@ function renderCadastroMotoboys(){
 document.getElementById('btn-add-local').addEventListener('click', async () => {
   const nome = document.getElementById('add-local-nome').value.trim();
   const endereco = document.getElementById('add-local-endereco').value.trim();
+  const regiao = document.getElementById('add-local-regiao').value.trim();
   const btn = document.getElementById('btn-add-local');
   if (!nome || !endereco) return;
   btn.disabled = true;
@@ -1400,29 +1422,59 @@ document.getElementById('btn-add-local').addEventListener('click', async () => {
   }catch(e){
     console.warn('Não foi possível localizar este endereço automaticamente:', e.message);
   }
-  db.locais.push({ id: uid('local'), nome, endereco, lat, lon });
+  db.locais.push({ id: uid('local'), nome, endereco, regiao, lat, lon });
   await saveDB();
   document.getElementById('add-local-nome').value = '';
   document.getElementById('add-local-endereco').value = '';
+  document.getElementById('add-local-regiao').value = '';
   btn.disabled = false;
   btn.textContent = 'Adicionar';
   renderAll();
 });
+document.getElementById('filtro-regiao-local').addEventListener('change', renderCadastroLocais);
 function renderCadastroLocais(){
   const wrap = document.getElementById('lista-locais');
+
+  // Preenche o filtro e o datalist com as regiões já usadas
+  const regioes = [...new Set(db.locais.map(l => (l.regiao || '').trim()).filter(Boolean))].sort();
+  const filtroSel = document.getElementById('filtro-regiao-local');
+  const filtroAtual = filtroSel.value;
+  filtroSel.innerHTML = `<option value="todas">Todas</option>` + regioes.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
+  if (regioes.includes(filtroAtual)) filtroSel.value = filtroAtual;
+  document.getElementById('regioes-existentes').innerHTML = regioes.map(r => `<option value="${escapeHtml(r)}">`).join('');
+
   if (db.locais.length === 0){
     wrap.innerHTML = `<div class="empty-state">Nenhum local cadastrado ainda.</div>`;
     return;
   }
-  wrap.innerHTML = db.locais.map(l => `
-    <div class="list-item">
-      <div class="info">
-        <div class="t1">${escapeHtml(l.nome)}</div>
-        <div class="t2">${escapeHtml(l.endereco)}</div>
-        <div class="t2">${l.lat != null ? 'Localização confirmada' : '⚠ Endereço não localizado — a distância não poderá ser calculada'}</div>
+  const filtro = filtroSel.value;
+  const lista = filtro === 'todas' ? db.locais : db.locais.filter(l => (l.regiao || '').trim() === filtro);
+  if (lista.length === 0){
+    wrap.innerHTML = `<div class="empty-state">Nenhum local nessa região.</div>`;
+    return;
+  }
+
+  // Agrupa por região (locais sem região entram em "Sem região definida")
+  const grupos = {};
+  lista.forEach(l => {
+    const chave = (l.regiao || '').trim() || 'Sem região definida';
+    if (!grupos[chave]) grupos[chave] = [];
+    grupos[chave].push(l);
+  });
+  const chavesOrdenadas = Object.keys(grupos).sort((a,b) => a === 'Sem região definida' ? 1 : b === 'Sem região definida' ? -1 : a.localeCompare(b));
+
+  wrap.innerHTML = chavesOrdenadas.map(chave => `
+    <div class="painel-secao-titulo" style="font-size:13px;margin-top:14px;">${escapeHtml(chave)}</div>
+    ${grupos[chave].map(l => `
+      <div class="list-item">
+        <div class="info">
+          <div class="t1">${escapeHtml(l.nome)}</div>
+          <div class="t2">${escapeHtml(l.endereco)}</div>
+          <div class="t2">${l.lat != null ? 'Localização confirmada' : '⚠ Endereço não localizado — a distância não poderá ser calculada'}</div>
+        </div>
+        <button class="btn-danger" data-remove-local="${l.id}">Remover</button>
       </div>
-      <button class="btn-danger" data-remove-local="${l.id}">Remover</button>
-    </div>
+    `).join('')}
   `).join('');
   wrap.querySelectorAll('[data-remove-local]').forEach(btn => {
     btn.addEventListener('click', async () => {
