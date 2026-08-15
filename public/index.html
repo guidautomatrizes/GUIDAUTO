@@ -182,6 +182,10 @@
   .tab-inner.active{color:var(--text);border-bottom-color:var(--amber);}
 
   .checkbox-row{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--panel-2);border:1px solid var(--line);border-radius:7px;margin-bottom:6px;font-size:13px;}
+  .regiao-grupo{margin-bottom:16px;}
+  .regiao-grupo-titulo{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+  .regiao-grupo-titulo span{font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--amber);}
+  .regiao-grupo-titulo button{font-size:11px;padding:4px 9px;}
   .checkbox-row input{width:auto;}
 
   .route-card{background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:14px 16px;margin-bottom:14px;transition:border-color .2s ease;animation:fadeUp .3s ease;}
@@ -355,7 +359,7 @@
     <ul class="navlist" id="navlist">
       <li data-view="painel" class="active">Painel</li>
       <li data-view="pedidos">Pedidos / DAVs</li>
-      <li data-view="rotas" data-admin-only="1">Rotas</li>
+      <li data-view="rotas" data-roles="admin,expedicao">Rotas</li>
       <li data-view="cadastros" data-admin-only="1">Cadastros</li>
       <li data-view="relatorios" data-admin-only="1">Relatórios</li>
       <li data-view="perfil">Perfil</li>
@@ -524,7 +528,7 @@
             <div class="field"><label>Senha</label><input type="password" id="add-colab-senha" placeholder="senha"></div>
             <div class="field">
               <label>Papel</label>
-              <select id="add-colab-papel"><option value="vendedor">Vendedor</option><option value="admin">Admin</option></select>
+              <select id="add-colab-papel"><option value="vendedor">Vendedor</option><option value="expedicao">Expedição</option><option value="admin">Admin</option></select>
             </div>
             <div class="field">
               <label>Unidade</label>
@@ -821,16 +825,29 @@ document.getElementById('btn-logout').addEventListener('click', () => {
   initLogin();
 });
 
+function papelLabel(papel){
+  if (papel === 'admin') return 'Administrador';
+  if (papel === 'expedicao') return 'Expedição';
+  return 'Vendedor';
+}
+// Expedição e admin podem despachar motoboys (montar/gerenciar rotas ativas);
+// só admin pode mexer em rotas/pedidos já concluídos, cadastros e relatórios.
+function podeDespachar(){ return currentUser.papel === 'admin' || currentUser.papel === 'expedicao'; }
+
 function enterApp(){
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').classList.add('show');
   document.getElementById('userbox-name').textContent = currentUser.nome;
-  document.getElementById('userbox-role').textContent = currentUser.papel === 'admin' ? 'Administrador' : 'Vendedor';
+  document.getElementById('userbox-role').textContent = papelLabel(currentUser.papel);
   document.querySelectorAll('#navlist li[data-admin-only]').forEach(li => {
     li.style.display = currentUser.papel === 'admin' ? '' : 'none';
   });
-  document.getElementById('card-novo-pedido').style.display = currentUser.papel === 'admin' ? 'block' : 'none';
-  document.getElementById('grid-pedidos-top').style.gridTemplateColumns = currentUser.papel === 'admin' ? '' : '1fr';
+  document.querySelectorAll('#navlist li[data-roles]').forEach(li => {
+    const papeisPermitidos = li.dataset.roles.split(',');
+    li.style.display = papeisPermitidos.includes(currentUser.papel) ? '' : 'none';
+  });
+  document.getElementById('card-novo-pedido').style.display = podeDespachar() ? 'block' : 'none';
+  document.getElementById('grid-pedidos-top').style.gridTemplateColumns = podeDespachar() ? '' : '1fr';
   document.getElementById('montar-unidade').value = currentUser.unidade || 'matriz';
   switchView('painel');
   renderAll();
@@ -951,7 +968,7 @@ document.getElementById('btn-exportar-relatorio').addEventListener('click', () =
 function renderPerfil(){
   document.getElementById('perfil-nome').value = currentUser.nome;
   document.getElementById('perfil-login').value = currentUser.login;
-  document.getElementById('perfil-papel').value = currentUser.papel === 'admin' ? 'Administrador' : 'Vendedor';
+  document.getElementById('perfil-papel').value = papelLabel(currentUser.papel);
 }
 
 document.getElementById('btn-trocar-senha').addEventListener('click', async () => {
@@ -1081,6 +1098,7 @@ let editandoPedidoId = null;
 function iniciarEdicaoPedido(pedidoId){
   const pedido = db.pedidos.find(p => p.id === pedidoId);
   if (!pedido) return;
+  if (currentUser.papel === 'expedicao' && pedido.status === 'entregue') return;
   editandoPedidoId = pedidoId;
   document.getElementById('novo-dav').value = pedido.dav;
   document.getElementById('novo-cliente').value = pedido.cliente || '';
@@ -1102,6 +1120,7 @@ function cancelarEdicaoPedido(){
 async function apagarPedido(pedidoId){
   const pedido = db.pedidos.find(p => p.id === pedidoId);
   if (!pedido) return;
+  if (currentUser.papel === 'expedicao' && pedido.status === 'entregue') return;
   if (!confirm('Apagar o pedido DAV ' + pedido.dav + '? Essa ação não pode ser desfeita.')) return;
   if (pedido.rotaId){
     const rota = db.rotas.find(r => r.id === pedido.rotaId);
@@ -1127,7 +1146,7 @@ async function apagarPedido(pedidoId){
 document.getElementById('btn-cancelar-edicao').addEventListener('click', cancelarEdicaoPedido);
 
 document.getElementById('btn-novo-pedido').addEventListener('click', async () => {
-  if (currentUser.papel !== 'admin') return;
+  if (!podeDespachar()) return;
   const dav = document.getElementById('novo-dav').value.trim();
   const cliente = document.getElementById('novo-cliente').value.trim();
   const localId = document.getElementById('novo-local').value;
@@ -1209,13 +1228,14 @@ function renderPedidosTabela(){
     wrap.innerHTML = `<div class="empty-state">Nenhum pedido encontrado com esse filtro.</div>`;
     return;
   }
-  const isAdmin = currentUser.papel === 'admin';
+  const mostrarColuna = podeDespachar();
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>DAV</th><th>Cliente</th><th>Motoboy</th><th>Status</th><th>Saída</th><th>Entrega</th><th>Obs.</th>${isAdmin ? '<th>Ações</th>' : ''}</tr></thead>
+      <thead><tr><th>DAV</th><th>Cliente</th><th>Motoboy</th><th>Status</th><th>Saída</th><th>Entrega</th><th>Obs.</th>${mostrarColuna ? '<th>Ações</th>' : ''}</tr></thead>
       <tbody>
         ${lista.map(p => {
           const motoboy = db.motoboys.find(m => m.id === p.motoboyId);
+          const podeEditarEsta = currentUser.papel === 'admin' || (currentUser.papel === 'expedicao' && p.status !== 'entregue');
           return `<tr>
             <td class="mono">${escapeHtml(p.dav)}</td>
             <td>${escapeHtml(nomeCliente(p))}</td>
@@ -1224,16 +1244,18 @@ function renderPedidosTabela(){
             <td class="mono">${p.horaSaida || '—'}</td>
             <td class="mono">${p.horaEntrega || '—'}</td>
             <td style="color:var(--amber);">${p.observacao ? escapeHtml(p.observacao) : '—'}</td>
-            ${isAdmin ? `<td class="row-actions">
-              <button class="btn-ghost" data-editar-pedido="${p.id}">Editar</button>
-              <button class="btn-danger" data-apagar-pedido="${p.id}">Apagar</button>
+            ${mostrarColuna ? `<td class="row-actions">
+              ${podeEditarEsta ? `
+                <button class="btn-ghost" data-editar-pedido="${p.id}">Editar</button>
+                <button class="btn-danger" data-apagar-pedido="${p.id}">Apagar</button>
+              ` : `<span class="t2" style="font-size:11px;color:var(--text-dim);">Já entregue</span>`}
             </td>` : ''}
           </tr>`;
         }).join('')}
       </tbody>
     </table>
   `;
-  if (isAdmin){
+  if (mostrarColuna){
     wrap.querySelectorAll('[data-editar-pedido]').forEach(btn => {
       btn.addEventListener('click', () => iniciarEdicaoPedido(btn.dataset.editarPedido));
     });
@@ -1243,7 +1265,7 @@ function renderPedidosTabela(){
   }
 }
 
-// ---------- Rotas (admin) ----------
+// ---------- Rotas (admin/expedição) ----------
 function renderMontarRota(){
   const marcados = new Set(Array.from(document.querySelectorAll('.chk-pedido-pendente:checked')).map(c => c.value));
   const pendentes = db.pedidos.filter(p => p.status === 'pendente');
@@ -1252,15 +1274,42 @@ function renderMontarRota(){
     wrap.innerHTML = `<div class="empty-state">Nenhum pedido pendente no momento.</div>`;
     return;
   }
-  wrap.innerHTML = pendentes.map(p => {
+
+  // Agrupa por região (do local vinculado ao pedido) pra facilitar montar rotas por zona.
+  const grupos = {};
+  pendentes.forEach(p => {
     const local = db.locais.find(l => l.id === p.localId);
-    return `
-      <div class="checkbox-row">
-        <input type="checkbox" value="${p.id}" class="chk-pedido-pendente" ${marcados.has(p.id) ? 'checked' : ''}>
-        <span>DAV <b class="mono">${escapeHtml(p.dav)}</b> — ${escapeHtml(nomeCliente(p))} (${local ? escapeHtml(local.nome) : '—'})</span>
+    const chave = (local && local.regiao && local.regiao.trim()) ? local.regiao.trim() : 'Sem região definida';
+    if (!grupos[chave]) grupos[chave] = [];
+    grupos[chave].push(p);
+  });
+  const chavesOrdenadas = Object.keys(grupos).sort((a,b) => a === 'Sem região definida' ? 1 : b === 'Sem região definida' ? -1 : a.localeCompare(b));
+
+  wrap.innerHTML = chavesOrdenadas.map(chave => `
+    <div class="regiao-grupo">
+      <div class="regiao-grupo-titulo">
+        <span>${escapeHtml(chave)}</span>
+        <button type="button" class="btn-ghost" data-marcar-regiao="${escapeHtml(chave)}">Marcar todos</button>
       </div>
-    `;
-  }).join('');
+      ${grupos[chave].map(p => {
+        const local = db.locais.find(l => l.id === p.localId);
+        return `
+          <div class="checkbox-row">
+            <input type="checkbox" value="${p.id}" class="chk-pedido-pendente" data-regiao="${escapeHtml(chave)}" ${marcados.has(p.id) ? 'checked' : ''}>
+            <span>DAV <b class="mono">${escapeHtml(p.dav)}</b> — ${escapeHtml(nomeCliente(p))} (${local ? escapeHtml(local.nome) : '—'})</span>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `).join('');
+
+  wrap.querySelectorAll('[data-marcar-regiao]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      wrap.querySelectorAll(`.chk-pedido-pendente[data-regiao="${CSS.escape(btn.dataset.marcarRegiao)}"]`).forEach(chk => {
+        chk.checked = true;
+      });
+    });
+  });
 }
 
 document.getElementById('btn-atribuir').addEventListener('click', async () => {
@@ -1475,7 +1524,7 @@ function renderRotasConcluidas(){
           <div class="t1">${escapeHtml(motoboy ? motoboy.nome : '—')}</div>
           <div class="t2">${r.pedidoIds.length} entrega(s) · Saiu ${r.horaSaida} · Concluída ${r.horaChegada}</div>
         </div>
-        <button class="btn-danger" data-apagar-rota-concluida="${r.id}">Apagar</button>
+        ${currentUser.papel === 'admin' ? `<button class="btn-danger" data-apagar-rota-concluida="${r.id}">Apagar</button>` : ''}
       </div>
     `;
   }).join('');
@@ -1659,7 +1708,7 @@ function renderCadastroColaboradores(){
     <div class="list-item">
       <div class="info">
         <div class="t1">${escapeHtml(u.nome)} <span class="mono" style="color:var(--text-dim);font-size:11px;">@${escapeHtml(u.login)}</span></div>
-        <div class="t2">${u.papel === 'admin' ? 'Administrador' : 'Vendedor'} · ${UNIDADE_LABEL[u.unidade] || 'Matriz'}</div>
+        <div class="t2">${papelLabel(u.papel)} · ${UNIDADE_LABEL[u.unidade] || 'Matriz'}</div>
       </div>
       ${u.id !== currentUser.id ? `<button class="btn-danger" data-remove-user="${u.id}">Remover</button>` : `<span class="t2" style="font-size:11px;">Você</span>`}
     </div>
