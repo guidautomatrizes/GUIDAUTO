@@ -1664,16 +1664,64 @@ function renderCadastroLocais(){
   wrap.innerHTML = chavesOrdenadas.map(chave => `
     <div class="painel-secao-titulo" style="font-size:13px;margin-top:14px;">${escapeHtml(chave)}</div>
     ${grupos[chave].map(l => `
-      <div class="list-item">
+      <div class="list-item" style="flex-wrap:wrap;">
         <div class="info">
           <div class="t1">${escapeHtml(l.nome)}</div>
           <div class="t2">${escapeHtml(l.endereco)}</div>
-          <div class="t2">${l.lat != null ? 'Localização confirmada' : '⚠ Endereço não localizado — a distância não poderá ser calculada'}</div>
+          <div class="t2" id="status-local-${l.id}">${l.lat != null ? 'Localização confirmada' : '⚠ Endereço não localizado — a distância não poderá ser calculada'}</div>
+          ${l.lat == null ? `
+            <div class="manual-coords" id="manual-coords-${l.id}" style="display:none;margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+              <input type="text" placeholder="Latitude (ex: -21.7642)" id="lat-${l.id}" style="width:150px;">
+              <input type="text" placeholder="Longitude (ex: -43.3467)" id="lon-${l.id}" style="width:150px;">
+              <button class="btn-ok" data-salvar-coords="${l.id}">Salvar coordenadas</button>
+            </div>
+          ` : ''}
         </div>
-        <button class="btn-danger" data-remove-local="${l.id}">Remover</button>
+        <div class="row-actions">
+          ${l.lat == null ? `
+            <button class="btn-ghost" data-tentar-local="${l.id}">Tentar novamente</button>
+            <button class="btn-ghost" data-manual-local="${l.id}">Inserir manualmente</button>
+          ` : ''}
+          <button class="btn-danger" data-remove-local="${l.id}">Remover</button>
+        </div>
       </div>
     `).join('')}
   `).join('');
+
+  wrap.querySelectorAll('[data-tentar-local]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.tentarLocal;
+      const local = db.locais.find(x => x.id === id);
+      const statusEl = document.getElementById('status-local-' + id);
+      statusEl.innerHTML = '<span class="spinner"></span>Tentando localizar novamente...';
+      try{
+        const geo = await geocodeEndereco(local.endereco);
+        local.lat = geo.lat; local.lon = geo.lon;
+        await saveDB();
+        renderAll();
+      }catch(e){
+        statusEl.textContent = '⚠ Ainda não localizado (' + e.message + ')';
+      }
+    });
+  });
+  wrap.querySelectorAll('[data-manual-local]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const el = document.getElementById('manual-coords-' + btn.dataset.manualLocal);
+      el.style.display = el.style.display === 'none' ? 'flex' : 'none';
+    });
+  });
+  wrap.querySelectorAll('[data-salvar-coords]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.salvarCoords;
+      const lat = parseFloat(document.getElementById('lat-' + id).value.replace(',', '.'));
+      const lon = parseFloat(document.getElementById('lon-' + id).value.replace(',', '.'));
+      if (isNaN(lat) || isNaN(lon)){ alert('Preencha latitude e longitude válidas.'); return; }
+      const local = db.locais.find(x => x.id === id);
+      local.lat = lat; local.lon = lon;
+      await saveDB();
+      renderAll();
+    });
+  });
   wrap.querySelectorAll('[data-remove-local]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const id = btn.dataset.removeLocal;
