@@ -362,6 +362,7 @@
       <li data-view="rotas" data-roles="admin,expedicao">Rotas</li>
       <li data-view="cadastros" data-admin-only="1">Cadastros</li>
       <li data-view="relatorios" data-admin-only="1">Relatórios</li>
+      <li data-view="minha-moto" data-roles="motoboy">Minha Moto</li>
       <li data-view="perfil">Perfil</li>
     </ul>
     <div class="userbox">
@@ -376,6 +377,7 @@
     <div id="view-painel" class="view">
       <h2>Painel de motoboys</h2>
       <div class="desc">Status em tempo real, separado por unidade.</div>
+      <div id="painel-alerta-manutencao"></div>
       <div id="painel-unidades"></div>
     </div>
 
@@ -472,6 +474,8 @@
 
       <div class="tabs-inner">
         <div class="tab-inner active" data-subtab="motoboys">Motoboys</div>
+        <div class="tab-inner" data-subtab="motos">Motos</div>
+        <div class="tab-inner" data-subtab="manutencao">Manutenção</div>
         <div class="tab-inner" data-subtab="locais">Locais</div>
         <div class="tab-inner" data-subtab="colaboradores">Colaboradores</div>
         <div class="tab-inner" data-subtab="unidades">Unidades</div>
@@ -501,6 +505,25 @@
         <div id="lista-motoboys"></div>
       </div>
 
+      <div id="sub-motos" class="subview" style="display:none;">
+        <div class="card">
+          <div class="inline-form">
+            <div class="field"><label>Placa</label><input type="text" id="add-moto-placa" placeholder="Ex: ABC1D23"></div>
+            <div class="field"><label>Modelo</label><input type="text" id="add-moto-modelo" placeholder="Ex: Honda CG 160"></div>
+            <button class="btn-primary small" id="btn-add-moto">Adicionar</button>
+          </div>
+        </div>
+        <div id="lista-motos"></div>
+      </div>
+
+      <div id="sub-manutencao" class="subview" style="display:none;">
+        <div class="card">
+          <h3>Alertas de manutenção</h3>
+          <div class="desc" style="margin-bottom:0;">Reportados pelos próprios motoboys em "Minha Moto".</div>
+        </div>
+        <div id="lista-manutencoes"></div>
+      </div>
+
       <div id="sub-locais" class="subview" style="display:none;">
         <div class="card">
           <div class="inline-form">
@@ -528,11 +551,15 @@
             <div class="field"><label>Senha</label><input type="password" id="add-colab-senha" placeholder="senha"></div>
             <div class="field">
               <label>Papel</label>
-              <select id="add-colab-papel"><option value="vendedor">Vendedor</option><option value="expedicao">Expedição</option><option value="admin">Admin</option></select>
+              <select id="add-colab-papel"><option value="vendedor">Vendedor</option><option value="expedicao">Expedição</option><option value="motoboy">Motoboy</option><option value="admin">Admin</option></select>
             </div>
             <div class="field">
               <label>Unidade</label>
               <select id="add-colab-unidade"><option value="matriz">Matriz</option><option value="filial">Filial</option></select>
+            </div>
+            <div class="field" id="campo-colab-motoboy" style="display:none;">
+              <label>Vincular a qual motoboy</label>
+              <select id="add-colab-motoboy"></select>
             </div>
             <button class="btn-primary small" id="btn-add-colab">Adicionar</button>
           </div>
@@ -584,6 +611,44 @@
       </div>
     </div>
 
+    <!-- MINHA MOTO -->
+    <div id="view-minha-moto" class="view" style="display:none;">
+      <h2>Minha Moto</h2>
+      <div class="desc">Ajude a manter a frota segura — avise a gente assim que notar qualquer problema.</div>
+
+      <div class="card" style="text-align:center;max-width:420px;">
+        <svg viewBox="0 0 240 140" style="width:200px;height:auto;margin:0 auto 14px auto;display:block;" xmlns="http://www.w3.org/2000/svg" stroke="var(--amber)" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="55" cy="105" r="26"/>
+          <circle cx="185" cy="105" r="26"/>
+          <circle cx="55" cy="105" r="6" fill="var(--amber)" stroke="none"/>
+          <circle cx="185" cy="105" r="6" fill="var(--amber)" stroke="none"/>
+          <path d="M55,105 L100,60 L140,60 L185,105"/>
+          <path d="M100,60 L85,30 L115,30"/>
+          <path d="M115,30 L145,30 L160,60"/>
+          <path d="M140,60 L120,105 L55,105"/>
+          <path d="M120,105 L150,80"/>
+          <circle cx="150" cy="75" r="8"/>
+          <path d="M85,30 L70,20 M85,30 L75,38"/>
+        </svg>
+        <label>Qual moto você está pilotando hoje?</label>
+        <select id="minha-moto-select"></select>
+        <div id="minha-moto-msg-select"></div>
+      </div>
+
+      <div class="card" style="max-width:420px;">
+        <h3>Reportar problema / manutenção</h3>
+        <label>O que está acontecendo?</label>
+        <input type="text" id="minha-moto-descricao" placeholder="Ex: barulho no freio, pneu careca, óleo vencendo...">
+        <button class="btn-primary" id="btn-reportar-manutencao" style="margin-top:14px;">🏍️ Reportar necessidade de manutenção</button>
+        <div id="minha-moto-msg"></div>
+      </div>
+
+      <div class="card" style="max-width:420px;">
+        <h3>Meus reportes</h3>
+        <div id="meus-reportes"></div>
+      </div>
+    </div>
+
     <!-- PERFIL -->
     <div id="view-perfil" class="view" style="display:none;">
       <h2>Perfil</h2>
@@ -624,7 +689,7 @@
 // todos eles já leem e escrevem através do objeto `db` na memória.
 // Veja o arquivo migracao-backend.md para o desenho sugerido da API.
 // =================================================================
-let db = { usuarios: [], motoboys: [], locais: [], pedidos: [], rotas: [], unidades: { matriz: null, filial: null }, config: { fatorTransito: 1.25, tempoParadaMin: 5 } };
+let db = { usuarios: [], motoboys: [], locais: [], pedidos: [], rotas: [], unidades: { matriz: null, filial: null }, config: { fatorTransito: 1.25, tempoParadaMin: 5 }, motos: [], manutencoes: [] };
 let currentUser = null; // {id, nome, login, papel} -- em memória, não persiste entre recarregamentos
 
 function uid(prefix){ return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2,7); }
@@ -677,12 +742,14 @@ async function loadDB(){
   try{
     const r = await fetch('/api/dados');
     const dados = await r.json();
-    db = dados || { usuarios:[], motoboys:[], locais:[], pedidos:[], rotas:[], unidades:{matriz:null,filial:null}, config:{fatorTransito:1.25,tempoParadaMin:5} };
+    db = dados || { usuarios:[], motoboys:[], locais:[], pedidos:[], rotas:[], unidades:{matriz:null,filial:null}, config:{fatorTransito:1.25,tempoParadaMin:5}, motos:[], manutencoes:[] };
     if (!db.unidades) db.unidades = { matriz: null, filial: null };
     if (!db.config) db.config = { fatorTransito: 1.25, tempoParadaMin: 5 };
+    if (!db.motos) db.motos = [];
+    if (!db.manutencoes) db.manutencoes = [];
   }catch(e){
     console.error('Erro ao carregar dados', e);
-    db = { usuarios:[], motoboys:[], locais:[], pedidos:[], rotas:[], unidades:{matriz:null,filial:null}, config:{fatorTransito:1.25,tempoParadaMin:5} };
+    db = { usuarios:[], motoboys:[], locais:[], pedidos:[], rotas:[], unidades:{matriz:null,filial:null}, config:{fatorTransito:1.25,tempoParadaMin:5}, motos:[], manutencoes:[] };
   }
 }
 async function saveDB(){
@@ -828,6 +895,7 @@ document.getElementById('btn-logout').addEventListener('click', () => {
 function papelLabel(papel){
   if (papel === 'admin') return 'Administrador';
   if (papel === 'expedicao') return 'Expedição';
+  if (papel === 'motoboy') return 'Motoboy';
   return 'Vendedor';
 }
 // Expedição e admin podem despachar motoboys (montar/gerenciar rotas ativas);
@@ -910,10 +978,13 @@ function renderAll(){
   renderRotasAndamento();
   renderRotasConcluidas();
   renderCadastroMotoboys();
+  renderCadastroMotos();
+  renderListaManutencoes();
   renderCadastroLocais();
   renderCadastroColaboradores();
   renderCadastroUnidades();
   renderPerfil();
+  renderMinhaMoto();
   initRelatorioMesPadrao();
 }
 
@@ -1060,6 +1131,25 @@ function renderSecaoUnidade(chave){
 }
 
 function renderPainel(){
+  const pendentesManutencao = db.manutencoes.filter(r => r.status === 'pendente');
+  const alertaWrap = document.getElementById('painel-alerta-manutencao');
+  if (pendentesManutencao.length === 0 || !podeDespachar()){
+    alertaWrap.innerHTML = '';
+  } else {
+    alertaWrap.innerHTML = `
+      <div class="card" style="border-color:var(--danger);background:rgba(255,77,77,.07);margin-bottom:20px;">
+        <h3 style="color:var(--danger);">⚠ ${pendentesManutencao.length} moto(s) precisando de manutenção</h3>
+        <div style="font-size:13px;color:var(--text-dim);">
+          ${pendentesManutencao.slice(0,4).map(r => {
+            const moto = db.motos.find(m => m.id === r.motoId);
+            return `${escapeHtml(moto ? moto.modelo + ' (' + moto.placa + ')' : 'Moto')} — ${escapeHtml(r.descricao)} · reportado por ${escapeHtml(r.motoboyNome)}`;
+          }).join('<br>')}
+          ${pendentesManutencao.length > 4 ? `<br>e mais ${pendentesManutencao.length - 4}...` : ''}
+        </div>
+        <div style="font-size:12px;color:var(--text-dim);margin-top:8px;">Veja e resolva em Cadastros → Manutenção</div>
+      </div>
+    `;
+  }
   document.getElementById('painel-unidades').innerHTML =
     `<div class="painel-unidades-grid">${renderSecaoUnidade('matriz')}${renderSecaoUnidade('filial')}</div>`;
 }
@@ -1753,16 +1843,23 @@ function renderCadastroLocais(){
   });
 }
 
+document.getElementById('add-colab-papel').addEventListener('change', (e) => {
+  document.getElementById('campo-colab-motoboy').style.display = e.target.value === 'motoboy' ? 'block' : 'none';
+});
 document.getElementById('btn-add-colab').addEventListener('click', async () => {
   const nome = document.getElementById('add-colab-nome').value.trim();
   const login = document.getElementById('add-colab-login').value.trim();
   const senha = document.getElementById('add-colab-senha').value;
   const papel = document.getElementById('add-colab-papel').value;
   const unidade = document.getElementById('add-colab-unidade').value;
+  const motoboyId = document.getElementById('add-colab-motoboy').value;
   const msgEl = 'add-colab-msg';
   if (!nome || !login || !senha){ setMsg(msgEl, 'Preencha todos os campos.', 'error'); return; }
+  if (papel === 'motoboy' && !motoboyId){ setMsg(msgEl, 'Selecione a qual motoboy esse login pertence (cadastre em Motoboys primeiro, se ainda não existir).', 'error'); return; }
   if (db.usuarios.find(u => u.login === login)){ setMsg(msgEl, 'Já existe um usuário com esse login.', 'error'); return; }
-  db.usuarios.push({ id: uid('user'), nome, login, senha, papel, unidade });
+  const usuario = { id: uid('user'), nome, login, senha, papel, unidade };
+  if (papel === 'motoboy') usuario.motoboyId = motoboyId;
+  db.usuarios.push(usuario);
   await saveDB();
   document.getElementById('add-colab-nome').value = '';
   document.getElementById('add-colab-login').value = '';
@@ -1771,16 +1868,24 @@ document.getElementById('btn-add-colab').addEventListener('click', async () => {
   renderAll();
 });
 function renderCadastroColaboradores(){
+  const selMoto = document.getElementById('add-colab-motoboy');
+  selMoto.innerHTML = db.motoboys.length
+    ? db.motoboys.map(m => `<option value="${m.id}">${escapeHtml(m.nome)}</option>`).join('')
+    : `<option value="">Cadastre um motoboy primeiro</option>`;
+
   const wrap = document.getElementById('lista-colaboradores');
-  wrap.innerHTML = db.usuarios.map(u => `
+  wrap.innerHTML = db.usuarios.map(u => {
+    const motoboyVinculado = u.motoboyId ? db.motoboys.find(m => m.id === u.motoboyId) : null;
+    return `
     <div class="list-item">
       <div class="info">
         <div class="t1">${escapeHtml(u.nome)} <span class="mono" style="color:var(--text-dim);font-size:11px;">@${escapeHtml(u.login)}</span></div>
-        <div class="t2">${papelLabel(u.papel)} · ${UNIDADE_LABEL[u.unidade] || 'Matriz'}</div>
+        <div class="t2">${papelLabel(u.papel)} · ${UNIDADE_LABEL[u.unidade] || 'Matriz'}${motoboyVinculado ? ' · motoboy: ' + escapeHtml(motoboyVinculado.nome) : ''}</div>
       </div>
       ${u.id !== currentUser.id ? `<button class="btn-danger" data-remove-user="${u.id}">Remover</button>` : `<span class="t2" style="font-size:11px;">Você</span>`}
     </div>
-  `).join('');
+  `;
+  }).join('');
   wrap.querySelectorAll('[data-remove-user]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const id = btn.dataset.removeUser;
@@ -1819,6 +1924,136 @@ document.getElementById('btn-salvar-matriz').addEventListener('click', () =>
   salvarUnidade('matriz', 'unidade-matriz-endereco', 'unidade-matriz-msg', 'unidade-matriz-status', 'btn-salvar-matriz'));
 document.getElementById('btn-salvar-filial').addEventListener('click', () =>
   salvarUnidade('filial', 'unidade-filial-endereco', 'unidade-filial-msg', 'unidade-filial-status', 'btn-salvar-filial'));
+
+// ---------- Motos ----------
+document.getElementById('btn-add-moto').addEventListener('click', async () => {
+  const placa = document.getElementById('add-moto-placa').value.trim();
+  const modelo = document.getElementById('add-moto-modelo').value.trim();
+  if (!placa || !modelo) return;
+  db.motos.push({ id: uid('moto2'), placa, modelo });
+  await saveDB();
+  document.getElementById('add-moto-placa').value = '';
+  document.getElementById('add-moto-modelo').value = '';
+  renderAll();
+});
+function renderCadastroMotos(){
+  const wrap = document.getElementById('lista-motos');
+  if (db.motos.length === 0){
+    wrap.innerHTML = `<div class="empty-state">Nenhuma moto cadastrada ainda.</div>`;
+    return;
+  }
+  wrap.innerHTML = db.motos.map(m => {
+    const temAlerta = db.manutencoes.some(x => x.motoId === m.id && x.status === 'pendente');
+    return `
+      <div class="list-item">
+        <div class="info">
+          <div class="t1">${escapeHtml(m.modelo)} <span class="mono" style="color:var(--text-dim);font-size:12px;">${escapeHtml(m.placa)}</span></div>
+          <div class="t2">${temAlerta ? '<span class="status-badge status-ausente" style="color:var(--danger);border:1px solid var(--danger);">⚠ Manutenção pendente</span>' : '<span class="status-badge status-disponivel">Ok</span>'}</div>
+        </div>
+        <button class="btn-danger" data-remove-moto="${m.id}">Remover</button>
+      </div>
+    `;
+  }).join('');
+  wrap.querySelectorAll('[data-remove-moto]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      db.motos = db.motos.filter(x => x.id !== btn.dataset.removeMoto);
+      await saveDB(); renderAll();
+    });
+  });
+}
+
+// ---------- Manutenções (visão admin/expedição) ----------
+function renderListaManutencoes(){
+  const wrap = document.getElementById('lista-manutencoes');
+  if (!wrap) return;
+  const lista = [...db.manutencoes].sort((a,b) => (b.criadoEm||'').localeCompare(a.criadoEm||''));
+  if (lista.length === 0){
+    wrap.innerHTML = `<div class="empty-state">Nenhum reporte de manutenção ainda.</div>`;
+    return;
+  }
+  wrap.innerHTML = lista.map(r => {
+    const moto = db.motos.find(m => m.id === r.motoId);
+    return `
+      <div class="list-item">
+        <div class="info">
+          <div class="t1">${moto ? escapeHtml(moto.modelo) + ' — ' + escapeHtml(moto.placa) : 'Moto removida'}</div>
+          <div class="t2">${escapeHtml(r.descricao)}</div>
+          <div class="t2" style="color:var(--text-dim);">Reportado por ${escapeHtml(r.motoboyNome)} em ${r.criadoEm}${r.status === 'resolvido' ? ' · Resolvido em ' + r.resolvidoEm : ''}</div>
+        </div>
+        <span class="status-badge status-${r.status === 'pendente' ? 'ausente' : 'disponivel'}" style="${r.status === 'pendente' ? 'color:var(--danger);border:1px solid var(--danger);' : ''}">${r.status === 'pendente' ? 'Pendente' : 'Resolvido'}</span>
+        ${r.status === 'pendente' && podeDespachar() ? `<button class="btn-ok" data-resolver-manutencao="${r.id}" style="margin-left:8px;">Marcar resolvido</button>` : ''}
+      </div>
+    `;
+  }).join('');
+  wrap.querySelectorAll('[data-resolver-manutencao]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const r = db.manutencoes.find(x => x.id === btn.dataset.resolverManutencao);
+      r.status = 'resolvido';
+      r.resolvidoEm = nowTime();
+      await saveDB(); renderAll();
+    });
+  });
+}
+
+// ---------- Minha Moto (motoboy) ----------
+function renderMinhaMoto(){
+  if (currentUser.papel !== 'motoboy') return;
+  const sel = document.getElementById('minha-moto-select');
+  if (!sel) return;
+  const motoboy = db.motoboys.find(m => m.id === currentUser.motoboyId);
+  if (!motoboy){
+    document.getElementById('view-minha-moto').innerHTML = `<div class="empty-state">Seu usuário não está vinculado a nenhum motoboy cadastrado. Peça para um admin corrigir isso em Cadastros → Colaboradores.</div>`;
+    return;
+  }
+  const valorAtual = sel.value;
+  sel.innerHTML = db.motos.length
+    ? db.motos.map(m => `<option value="${m.id}">${escapeHtml(m.modelo)} — ${escapeHtml(m.placa)}</option>`).join('')
+    : `<option value="">Cadastre uma moto em Cadastros → Motos</option>`;
+  if (motoboy.motoAtualId && db.motos.some(m => m.id === motoboy.motoAtualId)) sel.value = motoboy.motoAtualId;
+  else if (valorAtual) sel.value = valorAtual;
+
+  const historicoWrap = document.getElementById('meus-reportes');
+  const meus = db.manutencoes.filter(r => r.motoboyId === motoboy.id).sort((a,b) => (b.criadoEm||'').localeCompare(a.criadoEm||''));
+  historicoWrap.innerHTML = meus.length === 0
+    ? `<div class="empty-state">Você ainda não reportou nada. Se notar algo estranho na moto, é só avisar aqui.</div>`
+    : meus.map(r => {
+        const moto = db.motos.find(m => m.id === r.motoId);
+        return `
+          <div class="list-item">
+            <div class="info">
+              <div class="t1">${moto ? escapeHtml(moto.modelo) : ''}</div>
+              <div class="t2">${escapeHtml(r.descricao)}</div>
+              <div class="t2" style="color:var(--text-dim);">${r.criadoEm}</div>
+            </div>
+            <span class="status-badge status-${r.status === 'pendente' ? 'ausente' : 'disponivel'}" style="${r.status === 'pendente' ? 'color:var(--danger);border:1px solid var(--danger);' : ''}">${r.status === 'pendente' ? 'Pendente' : 'Resolvido'}</span>
+          </div>
+        `;
+      }).join('');
+}
+document.getElementById('minha-moto-select').addEventListener('change', async (e) => {
+  const motoboy = db.motoboys.find(m => m.id === currentUser.motoboyId);
+  if (!motoboy) return;
+  motoboy.motoAtualId = e.target.value;
+  await saveDB();
+  setMsg('minha-moto-msg-select', 'Moto atual atualizada.', 'ok');
+});
+document.getElementById('btn-reportar-manutencao').addEventListener('click', async () => {
+  const motoboy = db.motoboys.find(m => m.id === currentUser.motoboyId);
+  const descricao = document.getElementById('minha-moto-descricao').value.trim();
+  const motoId = document.getElementById('minha-moto-select').value;
+  const msgEl = 'minha-moto-msg';
+  if (!motoboy){ setMsg(msgEl, 'Seu usuário não está vinculado a um motoboy.', 'error'); return; }
+  if (!motoId){ setMsg(msgEl, 'Selecione qual moto você está pilotando.', 'error'); return; }
+  if (!descricao){ setMsg(msgEl, 'Descreva o problema.', 'error'); return; }
+  db.manutencoes.push({
+    id: uid('manut'), motoId, motoboyId: motoboy.id, motoboyNome: motoboy.nome,
+    descricao, status: 'pendente', criadoEm: nowTime(), resolvidoEm: null
+  });
+  await saveDB();
+  document.getElementById('minha-moto-descricao').value = '';
+  setMsg(msgEl, 'Reportado! Obrigado por ajudar a manter a frota segura. 🙏', 'ok');
+  renderAll();
+});
 
 function renderCadastroUnidades(){
   ['matriz', 'filial'].forEach(chave => {
