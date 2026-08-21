@@ -451,6 +451,11 @@
           <option value="filial">Filial</option>
         </select>
         <label>Pedidos pendentes <span style="text-transform:none;font-weight:400;color:var(--text-dim);">(marque um ou mais para atribuir tudo de uma vez ao mesmo motoboy)</span></label>
+        <select id="montar-filtro-resp" style="margin-bottom:10px;">
+          <option value="todas">Mostrar de todas as unidades</option>
+          <option value="matriz">Só responsabilidade da Matriz</option>
+          <option value="filial">Só responsabilidade da Filial</option>
+        </select>
         <div id="montar-pedidos-list"></div>
         <button class="btn-primary" id="btn-atribuir">Atribuir selecionados ao motoboy</button>
         <div id="montar-msg"></div>
@@ -699,6 +704,15 @@ function nomeCliente(p){
   if (p.cliente && p.cliente.trim()) return p.cliente;
   const local = db.locais.find(l => l.id === p.localId);
   return local ? local.nome : 'Cliente não informado';
+}
+function unidadeResponsavel(p){ return p.unidadeResponsavel || 'matriz'; }
+async function transferirPedido(pedidoId){
+  const pedido = db.pedidos.find(p => p.id === pedidoId);
+  if (!pedido) return;
+  const nova = unidadeResponsavel(pedido) === 'matriz' ? 'filial' : 'matriz';
+  pedido.unidadeResponsavel = nova;
+  await saveDB();
+  renderAll();
 }
 // Retorna quanto falta (ou quanto já passou, negativo) até um horário previsto.
 function textoContagem(ts){
@@ -1116,6 +1130,8 @@ function renderSecaoUnidade(chave){
         `;
       }).join('')}</div>`;
 
+  const pedidosSobResponsabilidade = db.pedidos.filter(p => p.status === 'pendente' && unidadeResponsavel(p) === chave).length;
+
   return `
     <div class="painel-secao">
       <div class="painel-secao-titulo">${UNIDADE_LABEL[chave]}</div>
@@ -1123,6 +1139,7 @@ function renderSecaoUnidade(chave){
         <div class="stat-box"><div class="val">${disponiveis}</div><div class="lbl">Disponíveis</div></div>
         <div class="stat-box"><div class="val">${emRota}</div><div class="lbl">Em rota</div></div>
         <div class="stat-box"><div class="val">${ausentes}</div><div class="lbl">Ausentes</div></div>
+        <div class="stat-box"><div class="val">${pedidosSobResponsabilidade}</div><div class="lbl">Pendentes aqui</div></div>
       </div>
       ${destaqueHtml}
       ${gridHtml}
@@ -1271,6 +1288,7 @@ document.getElementById('btn-novo-pedido').addEventListener('click', async () =>
     id: uid('ped'), dav, cliente, localId, observacao,
     vendedorNome: currentUser.nome,
     status: 'pendente', motoboyId: null, rotaId: null,
+    unidadeResponsavel: currentUser.unidade || 'matriz',
     horaSaida: null, horaEntrega: null, criadoEm: nowTime()
   });
   await saveDB();
@@ -1309,6 +1327,7 @@ document.getElementById('btn-buscar-dav').addEventListener('click', () => {
 });
 
 document.getElementById('filtro-status').addEventListener('change', renderPedidosTabela);
+document.getElementById('montar-filtro-resp').addEventListener('change', renderMontarRota);
 document.getElementById('filtro-motoboy').addEventListener('change', renderPedidosTabela);
 
 function renderPedidosTabela(){
@@ -1327,7 +1346,7 @@ function renderPedidosTabela(){
   const mostrarColuna = podeDespachar();
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>DAV</th><th>Cliente</th><th>Motoboy</th><th>Status</th><th>Saída</th><th>Entrega</th><th>Obs.</th>${mostrarColuna ? '<th>Ações</th>' : ''}</tr></thead>
+      <thead><tr><th>DAV</th><th>Cliente</th><th>Unidade</th><th>Motoboy</th><th>Status</th><th>Saída</th><th>Entrega</th><th>Obs.</th>${mostrarColuna ? '<th>Ações</th>' : ''}</tr></thead>
       <tbody>
         ${lista.map(p => {
           const motoboy = db.motoboys.find(m => m.id === p.motoboyId);
@@ -1335,6 +1354,7 @@ function renderPedidosTabela(){
           return `<tr>
             <td class="mono">${escapeHtml(p.dav)}</td>
             <td>${escapeHtml(nomeCliente(p))}</td>
+            <td><span class="status-badge status-em_rota">${UNIDADE_LABEL[unidadeResponsavel(p)]}</span></td>
             <td>${motoboy ? escapeHtml(motoboy.nome) : '—'}</td>
             <td><span class="status-badge status-${p.status}">${STATUS_LABEL[p.status]}</span></td>
             <td class="mono">${p.horaSaida || '—'}</td>
@@ -1344,6 +1364,7 @@ function renderPedidosTabela(){
               ${podeEditarEsta ? `
                 <button class="btn-ghost" data-editar-pedido="${p.id}">Editar</button>
                 <button class="btn-danger" data-apagar-pedido="${p.id}">Apagar</button>
+                ${p.status === 'pendente' ? `<button class="btn-ghost" data-transferir-pedido="${p.id}">Enviar p/ ${UNIDADE_LABEL[unidadeResponsavel(p) === 'matriz' ? 'filial' : 'matriz']}</button>` : ''}
               ` : `<span class="t2" style="font-size:11px;color:var(--text-dim);">Já entregue</span>`}
             </td>` : ''}
           </tr>`;
@@ -1355,6 +1376,9 @@ function renderPedidosTabela(){
     wrap.querySelectorAll('[data-editar-pedido]').forEach(btn => {
       btn.addEventListener('click', () => iniciarEdicaoPedido(btn.dataset.editarPedido));
     });
+    wrap.querySelectorAll('[data-transferir-pedido]').forEach(btn => {
+      btn.addEventListener('click', () => transferirPedido(btn.dataset.transferirPedido));
+    });
     wrap.querySelectorAll('[data-apagar-pedido]').forEach(btn => {
       btn.addEventListener('click', () => apagarPedido(btn.dataset.apagarPedido));
     });
@@ -1364,10 +1388,12 @@ function renderPedidosTabela(){
 // ---------- Rotas (admin/expedição) ----------
 function renderMontarRota(){
   const marcados = new Set(Array.from(document.querySelectorAll('.chk-pedido-pendente:checked')).map(c => c.value));
-  const pendentes = db.pedidos.filter(p => p.status === 'pendente');
+  const filtroResp = document.getElementById('montar-filtro-resp').value;
+  let pendentes = db.pedidos.filter(p => p.status === 'pendente');
+  if (filtroResp !== 'todas') pendentes = pendentes.filter(p => unidadeResponsavel(p) === filtroResp);
   const wrap = document.getElementById('montar-pedidos-list');
   if (pendentes.length === 0){
-    wrap.innerHTML = `<div class="empty-state">Nenhum pedido pendente no momento.</div>`;
+    wrap.innerHTML = `<div class="empty-state">Nenhum pedido pendente ${filtroResp !== 'todas' ? 'dessa unidade' : ''} no momento.</div>`;
     return;
   }
 
@@ -1389,16 +1415,22 @@ function renderMontarRota(){
       </div>
       ${grupos[chave].map(p => {
         const local = db.locais.find(l => l.id === p.localId);
+        const unidResp = unidadeResponsavel(p);
         return `
           <div class="checkbox-row">
             <input type="checkbox" value="${p.id}" class="chk-pedido-pendente" data-regiao="${escapeHtml(chave)}" ${marcados.has(p.id) ? 'checked' : ''}>
             <span>DAV <b class="mono">${escapeHtml(p.dav)}</b> — ${escapeHtml(nomeCliente(p))} (${local ? escapeHtml(local.nome) : '—'})</span>
+            <span class="status-badge status-em_rota" style="margin-left:auto;">${UNIDADE_LABEL[unidResp]}</span>
+            <button type="button" class="btn-ghost" data-transferir-pedido-montar="${p.id}" title="Enviar para ${UNIDADE_LABEL[unidResp === 'matriz' ? 'filial' : 'matriz']}">↔</button>
           </div>
         `;
       }).join('')}
     </div>
   `).join('');
 
+  wrap.querySelectorAll('[data-transferir-pedido-montar]').forEach(btn => {
+    btn.addEventListener('click', () => transferirPedido(btn.dataset.transferirPedidoMontar));
+  });
   wrap.querySelectorAll('[data-marcar-regiao]').forEach(btn => {
     btn.addEventListener('click', () => {
       wrap.querySelectorAll(`.chk-pedido-pendente[data-regiao="${CSS.escape(btn.dataset.marcarRegiao)}"]`).forEach(chk => {
