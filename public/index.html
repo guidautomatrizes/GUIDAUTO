@@ -405,7 +405,7 @@
           <input type="text" id="novo-dav" placeholder="Ex: 10234">
           <label>Cliente <span style="text-transform:none;font-weight:400;color:var(--text-dim);">(opcional)</span></label>
           <input type="text" id="novo-cliente" placeholder="Nome do cliente">
-          <label>Local de entrega</label>
+          <label>Local de entrega <span style="text-transform:none;font-weight:400;color:var(--text-dim);">(opcional)</span></label>
           <select id="novo-local"></select>
           <label>Observação <span style="text-transform:none;font-weight:400;color:var(--text-dim);">(opcional — pode preencher depois também)</span></label>
           <input type="text" id="novo-observacao" placeholder="Ex: Receber">
@@ -1176,7 +1176,7 @@ function renderLocaisSelect(){
   const sel = document.getElementById('novo-local');
   const valorAtual = sel.value;
   if (db.locais.length === 0){
-    sel.innerHTML = `<option value="">Cadastre um local em Cadastros</option>`;
+    sel.innerHTML = `<option value="">Nenhum / a definir depois</option>`;
     return;
   }
   const grupos = {};
@@ -1186,12 +1186,13 @@ function renderLocaisSelect(){
     grupos[chave].push(l);
   });
   const chavesOrdenadas = Object.keys(grupos).sort((a,b) => a === 'Sem região definida' ? 1 : b === 'Sem região definida' ? -1 : a.localeCompare(b));
-  sel.innerHTML = chavesOrdenadas.map(chave => `
+  sel.innerHTML = `<option value="">Nenhum / a definir depois</option>` + chavesOrdenadas.map(chave => `
     <optgroup label="${escapeHtml(chave)}">
       ${grupos[chave].map(l => `<option value="${l.id}">${escapeHtml(l.nome)} — ${escapeHtml(l.endereco)}</option>`).join('')}
     </optgroup>
   `).join('');
-  if (valorAtual && db.locais.some(l => l.id === valorAtual)) sel.value = valorAtual;
+  if (db.locais.some(l => l.id === valorAtual)) sel.value = valorAtual;
+  else sel.value = '';
 }
 function renderMotoboyFiltro(){
   const sel = document.getElementById('filtro-motoboy');
@@ -1215,7 +1216,7 @@ function iniciarEdicaoPedido(pedidoId){
   editandoPedidoId = pedidoId;
   document.getElementById('novo-dav').value = pedido.dav;
   document.getElementById('novo-cliente').value = pedido.cliente || '';
-  document.getElementById('novo-local').value = pedido.localId;
+  document.getElementById('novo-local').value = pedido.localId || '';
   document.getElementById('novo-observacao').value = pedido.observacao || '';
   document.getElementById('btn-novo-pedido').textContent = 'Salvar edição';
   document.getElementById('btn-cancelar-edicao').style.display = 'inline-block';
@@ -1265,8 +1266,8 @@ document.getElementById('btn-novo-pedido').addEventListener('click', async () =>
   const localId = document.getElementById('novo-local').value;
   const observacao = document.getElementById('novo-observacao').value.trim();
   const msgEl = 'novo-pedido-msg';
-  if (!dav || !localId){
-    setMsg(msgEl, 'Preencha a DAV e o local.', 'error'); return;
+  if (!dav){
+    setMsg(msgEl, 'Preencha a DAV.', 'error'); return;
   }
   // DAVs podem se repetir (ex: mesma nota em entregas diferentes), então não bloqueamos duplicidade.
 
