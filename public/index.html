@@ -71,7 +71,7 @@
 
   label{display:block;font-size:12px;font-weight:600;color:var(--text-dim);margin:12px 0 6px 0;text-transform:uppercase;letter-spacing:.05em;}
   label:first-of-type{margin-top:0;}
-  input[type=text],input[type=password],input[type=month],select{
+  input[type=text],input[type=password],input[type=month],input[type=date],select{
     width:100%; background:var(--panel-2); border:1px solid var(--line); color:var(--text);
     padding:10px 11px; border-radius:6px; font-family:'Inter',sans-serif; font-size:14px; outline:none;
     transition:border-color .15s ease, box-shadow .15s ease;
@@ -146,6 +146,7 @@
   .status-em_rota{background:rgba(242,169,60,.14);color:var(--amber);}
   .status-ausente{background:rgba(74,83,97,.3);color:var(--text-dim);}
   .status-almoco{background:#000;color:#fff;border:1px solid var(--amber);font-weight:700;}
+  .status-em_transferencia{background:rgba(120,130,255,.14);color:#9aa3ff;border:1px solid rgba(120,130,255,.35);}
   .status-pendente{background:rgba(74,83,97,.3);color:var(--text-dim);}
   .status-entregue{background:rgba(95,199,163,.14);color:var(--ok);}
 
@@ -406,6 +407,7 @@
           <label>Cliente <span style="text-transform:none;font-weight:400;color:var(--text-dim);">(opcional)</span></label>
           <input type="text" id="novo-cliente" placeholder="Nome do cliente">
           <label>Local de entrega <span style="text-transform:none;font-weight:400;color:var(--text-dim);">(opcional)</span></label>
+          <input type="text" id="busca-local-novo-pedido" placeholder="🔎 Buscar cliente ou endereço..." style="margin-bottom:8px;">
           <select id="novo-local"></select>
           <label>Observação <span style="text-transform:none;font-weight:400;color:var(--text-dim);">(opcional — pode preencher depois também)</span></label>
           <input type="text" id="novo-observacao" placeholder="Ex: Receber">
@@ -423,6 +425,7 @@
             <select id="filtro-status">
               <option value="todos">Todos</option>
               <option value="pendente">Pendente</option>
+              <option value="em_transferencia">Em transferência</option>
               <option value="em_rota">Em rota</option>
               <option value="entregue">Entregue</option>
             </select>
@@ -430,6 +433,10 @@
           <div class="field">
             <label>Filtrar por motoboy</label>
             <select id="filtro-motoboy"><option value="todos">Todos</option></select>
+          </div>
+          <div class="field">
+            <label>Filtrar por região</label>
+            <select id="filtro-regiao-pedido"><option value="todas">Todas</option></select>
           </div>
         </div>
         <div id="pedidos-tabela"></div>
@@ -440,6 +447,37 @@
     <div id="view-rotas" class="view" style="display:none;">
       <h2>Rotas</h2>
       <div class="desc">Monte rotas atribuindo pedidos pendentes a um motoboy, e acompanhe as rotas em andamento.</div>
+
+      <div class="card">
+        <h3>Viagem interna <span style="text-transform:none;font-weight:400;color:var(--text-dim);font-size:11px;">(buscar peça, devolução ou levar um pedido de uma unidade pra outra)</span></h3>
+        <label>Motoboy</label>
+        <select id="viagem-motoboy"></select>
+        <label>Saindo de</label>
+        <select id="viagem-origem">
+          <option value="matriz">Matriz</option>
+          <option value="filial">Filial</option>
+        </select>
+        <label>Indo para <span id="viagem-destino-label" style="text-transform:none;font-weight:400;color:var(--amber);">Filial</span></label>
+        <label>Motivo</label>
+        <select id="viagem-tipo">
+          <option value="buscar_peca">Buscar peça em outra loja</option>
+          <option value="devolucao">Devolução</option>
+          <option value="transferencia_dav">Transferir um pedido (DAV) para a outra unidade entregar</option>
+        </select>
+        <div id="campo-viagem-pedido" style="display:none;">
+          <label>Qual pedido está sendo transferido?</label>
+          <select id="viagem-pedido"></select>
+        </div>
+        <label>Descrição <span style="text-transform:none;font-weight:400;color:var(--text-dim);">(opcional — ex: "correia dentada")</span></label>
+        <input type="text" id="viagem-descricao" placeholder="Detalhe o que está buscando/levando">
+        <button class="btn-primary" id="btn-iniciar-viagem" style="margin-top:14px;">Registrar saída</button>
+        <div id="viagem-msg"></div>
+      </div>
+
+      <div class="card">
+        <h3>Viagens internas em andamento</h3>
+        <div id="viagens-andamento"></div>
+      </div>
 
       <div class="card">
         <h3>Atribuir pedidos pendentes</h3>
@@ -606,11 +644,24 @@
     <!-- RELATÓRIOS -->
     <div id="view-relatorios" class="view" style="display:none;">
       <h2>Relatórios</h2>
-      <div class="desc">Baixe uma planilha com as entregas de um período, pronta pra abrir no Excel ou no Google Sheets.</div>
+      <div class="desc">Baixe uma planilha do período que quiser, com ranking de motoboys, clientes e regiões — pronta pra abrir no Excel ou no Google Sheets.</div>
       <div class="card" style="max-width:460px;">
         <h3>Exportar entregas</h3>
-        <label>Mês</label>
-        <input type="month" id="relatorio-mes">
+        <label>Período</label>
+        <select id="relatorio-tipo-periodo">
+          <option value="mes">Um mês inteiro</option>
+          <option value="intervalo">Escolher datas (de/até)</option>
+        </select>
+        <div id="relatorio-campo-mes">
+          <label>Mês</label>
+          <input type="month" id="relatorio-mes">
+        </div>
+        <div id="relatorio-campo-intervalo" style="display:none;">
+          <label>De</label>
+          <input type="date" id="relatorio-data-de">
+          <label>Até</label>
+          <input type="date" id="relatorio-data-ate">
+        </div>
         <button class="btn-primary" id="btn-exportar-relatorio" style="margin-top:14px;">Baixar planilha (.xlsx)</button>
         <div id="relatorio-msg"></div>
       </div>
@@ -694,7 +745,7 @@
 // todos eles já leem e escrevem através do objeto `db` na memória.
 // Veja o arquivo migracao-backend.md para o desenho sugerido da API.
 // =================================================================
-let db = { usuarios: [], motoboys: [], locais: [], pedidos: [], rotas: [], unidades: { matriz: null, filial: null }, config: { fatorTransito: 1.25, tempoParadaMin: 5 }, motos: [], manutencoes: [] };
+let db = { usuarios: [], motoboys: [], locais: [], pedidos: [], rotas: [], unidades: { matriz: null, filial: null }, config: { fatorTransito: 1.25, tempoParadaMin: 5 }, motos: [], manutencoes: [], viagens: [] };
 let currentUser = null; // {id, nome, login, papel} -- em memória, não persiste entre recarregamentos
 
 function uid(prefix){ return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2,7); }
@@ -756,14 +807,15 @@ async function loadDB(){
   try{
     const r = await fetch('/api/dados');
     const dados = await r.json();
-    db = dados || { usuarios:[], motoboys:[], locais:[], pedidos:[], rotas:[], unidades:{matriz:null,filial:null}, config:{fatorTransito:1.25,tempoParadaMin:5}, motos:[], manutencoes:[] };
+    db = dados || { usuarios:[], motoboys:[], locais:[], pedidos:[], rotas:[], unidades:{matriz:null,filial:null}, config:{fatorTransito:1.25,tempoParadaMin:5}, motos:[], manutencoes:[], viagens:[] };
     if (!db.unidades) db.unidades = { matriz: null, filial: null };
     if (!db.config) db.config = { fatorTransito: 1.25, tempoParadaMin: 5 };
     if (!db.motos) db.motos = [];
     if (!db.manutencoes) db.manutencoes = [];
+    if (!db.viagens) db.viagens = [];
   }catch(e){
     console.error('Erro ao carregar dados', e);
-    db = { usuarios:[], motoboys:[], locais:[], pedidos:[], rotas:[], unidades:{matriz:null,filial:null}, config:{fatorTransito:1.25,tempoParadaMin:5}, motos:[], manutencoes:[] };
+    db = { usuarios:[], motoboys:[], locais:[], pedidos:[], rotas:[], unidades:{matriz:null,filial:null}, config:{fatorTransito:1.25,tempoParadaMin:5}, motos:[], manutencoes:[], viagens:[] };
   }
 }
 async function saveDB(){
@@ -776,7 +828,7 @@ async function saveDB(){
   }catch(e){ console.error('Erro ao salvar', e); }
 }
 
-const STATUS_LABEL = { disponivel:'Disponível', em_rota:'Em rota', ausente:'Ausente', almoco:'Almoço', pendente:'Pendente', entregue:'Entregue' };
+const STATUS_LABEL = { disponivel:'Disponível', em_rota:'Em rota', ausente:'Ausente', almoco:'Almoço', pendente:'Pendente', em_transferencia:'Em transferência', entregue:'Entregue' };
 const UNIDADE_LABEL = { matriz: 'Matriz', filial: 'Filial' };
 
 // =================================================================
@@ -800,6 +852,126 @@ async function calcularRotaOSRM(pontos){
   const data = await res.json();
   if (!data.routes || data.routes.length === 0) throw new Error('Rota não encontrada entre esses pontos.');
   return { distanciaKm: data.routes[0].distance / 1000, duracaoMin: data.routes[0].duration / 60 };
+}
+
+const TIPO_VIAGEM_LABEL = { buscar_peca: 'Buscar peça', devolucao: 'Devolução', transferencia_dav: 'Transferência de pedido' };
+
+document.getElementById('btn-iniciar-viagem').addEventListener('click', async () => {
+  const motoboyId = document.getElementById('viagem-motoboy').value;
+  const origem = document.getElementById('viagem-origem').value;
+  const destino = origem === 'matriz' ? 'filial' : 'matriz';
+  const tipo = document.getElementById('viagem-tipo').value;
+  const pedidoId = document.getElementById('viagem-pedido').value;
+  const descricao = document.getElementById('viagem-descricao').value.trim();
+  const msgEl = 'viagem-msg';
+
+  if (!motoboyId){ setMsg(msgEl, 'Selecione um motoboy.', 'error'); return; }
+  if (tipo === 'transferencia_dav' && !pedidoId){ setMsg(msgEl, 'Selecione qual pedido está sendo transferido.', 'error'); return; }
+
+  const motoboy = db.motoboys.find(m => m.id === motoboyId);
+  const btn = document.getElementById('btn-iniciar-viagem');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Calculando...';
+
+  const viagem = {
+    id: uid('viagem'), motoboyId, origem, destino, tipo,
+    pedidoId: tipo === 'transferencia_dav' ? pedidoId : null,
+    descricao, status: 'em_andamento', horaSaida: nowTime(), horaChegada: null,
+    distanciaKm: null, duracaoMin: null, previsaoChegadaTs: null, previsaoChegada: null
+  };
+
+  const pontoOrigem = db.unidades[origem];
+  const pontoDestino = db.unidades[destino];
+  if (pontoOrigem && pontoOrigem.lat && pontoDestino && pontoDestino.lat){
+    try{
+      const r = await calcularRotaOSRM([{lat:pontoOrigem.lat, lon:pontoOrigem.lon}, {lat:pontoDestino.lat, lon:pontoDestino.lon}]);
+      const fatorTransito = db.config.fatorTransito || 1.25;
+      const duracaoTotal = r.duracaoMin * fatorTransito;
+      viagem.distanciaKm = r.distanciaKm;
+      viagem.duracaoMin = duracaoTotal;
+      viagem.previsaoChegadaTs = Date.now() + duracaoTotal * 60000;
+      viagem.previsaoChegada = new Date(viagem.previsaoChegadaTs).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+    }catch(e){
+      console.error('Erro ao calcular viagem interna', e);
+    }
+  }
+
+  db.viagens.push(viagem);
+  motoboy.status = 'em_rota';
+  if (tipo === 'transferencia_dav'){
+    const pedido = db.pedidos.find(p => p.id === pedidoId);
+    pedido.status = 'em_transferencia';
+    pedido.motoboyId = motoboyId;
+    pedido.viagemId = viagem.id;
+  }
+  await saveDB();
+  btn.disabled = false;
+  btn.textContent = 'Registrar saída';
+  document.getElementById('viagem-descricao').value = '';
+  setMsg(msgEl, 'Viagem registrada.', 'ok');
+  renderAll();
+});
+
+function renderViagensAndamento(){
+  const wrap = document.getElementById('viagens-andamento');
+  if (!wrap) return;
+  const viagens = db.viagens.filter(v => v.status === 'em_andamento');
+  if (viagens.length === 0){
+    wrap.innerHTML = `<div class="empty-state">Nenhuma viagem interna em andamento.</div>`;
+    return;
+  }
+  wrap.innerHTML = viagens.map(v => {
+    const motoboy = db.motoboys.find(m => m.id === v.motoboyId);
+    const pedido = v.pedidoId ? db.pedidos.find(p => p.id === v.pedidoId) : null;
+    const estimativaHtml = v.previsaoChegadaTs
+      ? (() => {
+          const c = textoContagem(v.previsaoChegadaTs);
+          const cor = c.atrasado ? 'var(--danger)' : 'var(--amber)';
+          return `<span class="meta mono" style="color:${cor};">~${v.distanciaKm.toFixed(1)} km · chegada prevista ${v.previsaoChegada} · ${c.texto}</span>`;
+        })()
+      : `<span class="meta" style="color:var(--text-dim);">Estimativa indisponível (cadastre os endereços das unidades)</span>`;
+    return `
+      <div class="route-card">
+        <div class="head">
+          <span class="moto">${escapeHtml(motoboy ? motoboy.nome : '—')} <span class="status-badge status-em_transferencia" style="margin-left:6px;">${TIPO_VIAGEM_LABEL[v.tipo]}</span></span>
+          <span class="meta">${UNIDADE_LABEL[v.origem]} → ${UNIDADE_LABEL[v.destino]} · saiu ${v.horaSaida}</span>
+        </div>
+        <div style="margin-bottom:8px;">${estimativaHtml}</div>
+        ${pedido ? `<div style="font-size:13px;margin-bottom:8px;">Levando: DAV <b class="mono">${escapeHtml(pedido.dav)}</b> — ${escapeHtml(nomeCliente(pedido))}</div>` : ''}
+        ${v.descricao ? `<div style="font-size:13px;color:var(--text-dim);margin-bottom:8px;">${escapeHtml(v.descricao)}</div>` : ''}
+        ${podeDespachar() ? `<button class="btn-ok" data-concluir-viagem="${v.id}">Marcar chegada em ${UNIDADE_LABEL[v.destino]}</button>` : ''}
+      </div>
+    `;
+  }).join('');
+  wrap.querySelectorAll('[data-concluir-viagem]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const viagem = db.viagens.find(v => v.id === btn.dataset.concluirViagem);
+      viagem.status = 'concluida';
+      viagem.horaChegada = nowTime();
+      const motoboy = db.motoboys.find(m => m.id === viagem.motoboyId);
+      if (motoboy && motoboy.status !== 'ausente'){
+        const temOutraAtividade = db.rotas.some(r => r.motoboyId === motoboy.id && r.status === 'em_andamento')
+          || db.viagens.some(v => v.motoboyId === motoboy.id && v.status === 'em_andamento' && v.id !== viagem.id);
+        if (!temOutraAtividade) motoboy.status = 'disponivel';
+      }
+      if (viagem.tipo === 'transferencia_dav' && viagem.pedidoId){
+        const pedido = db.pedidos.find(p => p.id === viagem.pedidoId);
+        if (pedido){
+          pedido.status = 'pendente';
+          pedido.unidadeResponsavel = viagem.destino;
+          pedido.motoboyId = null;
+          pedido.viagemId = null;
+          if (!pedido.transferenciaHistorico) pedido.transferenciaHistorico = [];
+          pedido.transferenciaHistorico.push({
+            motoboyNome: motoboy ? motoboy.nome : '—',
+            origem: viagem.origem, destino: viagem.destino, data: nowTime()
+          });
+        }
+      }
+      await saveDB();
+      renderAll();
+    });
+  });
 }
 
 // Recalcula a distância total e a previsão de retorno de uma rota
@@ -991,6 +1163,9 @@ function renderAll(){
   renderMontarRota();
   renderRotasAndamento();
   renderRotasConcluidas();
+  atualizarDestinoViagem();
+  renderPedidosParaViagem();
+  renderViagensAndamento();
   renderCadastroMotoboys();
   renderCadastroMotos();
   renderListaManutencoes();
@@ -1010,6 +1185,10 @@ function initRelatorioMesPadrao(){
     input.value = agora.getFullYear() + '-' + String(agora.getMonth() + 1).padStart(2, '0');
   }
 }
+document.getElementById('relatorio-tipo-periodo').addEventListener('change', (e) => {
+  document.getElementById('relatorio-campo-mes').style.display = e.target.value === 'mes' ? 'block' : 'none';
+  document.getElementById('relatorio-campo-intervalo').style.display = e.target.value === 'intervalo' ? 'block' : 'none';
+});
 function pedidoNoMes(p, anoMes){
   if (!p.criadoEm) return false;
   const m = p.criadoEm.match(/(\d{2})\/(\d{2})\/(\d{4})/);
@@ -1017,14 +1196,44 @@ function pedidoNoMes(p, anoMes){
   const chave = m[3] + '-' + m[2];
   return chave === anoMes;
 }
+function dataDoPedido(p){
+  if (!p.criadoEm) return null;
+  const m = p.criadoEm.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if (!m) return null;
+  return new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
+}
+function pedidoNoIntervalo(p, de, ate){
+  const d = dataDoPedido(p);
+  if (!d) return false;
+  return d >= de && d <= ate;
+}
 document.getElementById('btn-exportar-relatorio').addEventListener('click', () => {
-  const anoMes = document.getElementById('relatorio-mes').value;
   const msgEl = 'relatorio-msg';
-  if (!anoMes){ setMsg(msgEl, 'Escolha um mês.', 'error'); return; }
-  const pedidosDoMes = db.pedidos.filter(p => pedidoNoMes(p, anoMes));
-  if (pedidosDoMes.length === 0){ setMsg(msgEl, 'Nenhuma entrega registrada nesse mês.', 'error'); return; }
+  const tipoPeriodo = document.getElementById('relatorio-tipo-periodo').value;
+  let pedidosDoPeriodo, nomeArquivo, descricaoPeriodo;
 
-  const linhas = pedidosDoMes.map(p => {
+  if (tipoPeriodo === 'mes'){
+    const anoMes = document.getElementById('relatorio-mes').value;
+    if (!anoMes){ setMsg(msgEl, 'Escolha um mês.', 'error'); return; }
+    pedidosDoPeriodo = db.pedidos.filter(p => pedidoNoMes(p, anoMes));
+    nomeArquivo = `entregas-${anoMes}.xlsx`;
+    descricaoPeriodo = anoMes;
+  } else {
+    const deStr = document.getElementById('relatorio-data-de').value;
+    const ateStr = document.getElementById('relatorio-data-ate').value;
+    if (!deStr || !ateStr){ setMsg(msgEl, 'Escolha as duas datas.', 'error'); return; }
+    const de = new Date(deStr + 'T00:00:00');
+    const ate = new Date(ateStr + 'T23:59:59');
+    if (de > ate){ setMsg(msgEl, 'A data "De" precisa ser antes da data "Até".', 'error'); return; }
+    pedidosDoPeriodo = db.pedidos.filter(p => pedidoNoIntervalo(p, de, ate));
+    nomeArquivo = `entregas-${deStr}-a-${ateStr}.xlsx`;
+    descricaoPeriodo = `${deStr} a ${ateStr}`;
+  }
+
+  if (pedidosDoPeriodo.length === 0){ setMsg(msgEl, 'Nenhuma entrega registrada nesse período.', 'error'); return; }
+
+  // --- Aba 1: Entregas ---
+  const linhas = pedidosDoPeriodo.map(p => {
     const local = db.locais.find(l => l.id === p.localId);
     const motoboy = db.motoboys.find(m => m.id === p.motoboyId);
     const rota = db.rotas.find(r => r.id === p.rotaId);
@@ -1044,15 +1253,69 @@ document.getElementById('btn-exportar-relatorio').addEventListener('click', () =
       'Observação': p.observacao || ''
     };
   });
-
-  const planilha = XLSX.utils.json_to_sheet(linhas);
-  planilha['!cols'] = [
-    {wch:10},{wch:22},{wch:20},{wch:30},{wch:16},{wch:18},{wch:9},{wch:12},{wch:20},{wch:20},{wch:20},{wch:20},{wch:24}
+  const planilhaEntregas = XLSX.utils.json_to_sheet(linhas);
+  planilhaEntregas['!cols'] = [
+    {wch:10},{wch:22},{wch:20},{wch:30},{wch:16},{wch:18},{wch:9},{wch:16},{wch:20},{wch:20},{wch:20},{wch:20},{wch:24}
   ];
+
+  // --- Aba 2: Ranking Motoboys (por entregas concluídas) ---
+  const contagemMotoboy = {};
+  pedidosDoPeriodo.filter(p => p.status === 'entregue' && p.motoboyId).forEach(p => {
+    contagemMotoboy[p.motoboyId] = (contagemMotoboy[p.motoboyId] || 0) + 1;
+  });
+  const rankingMotoboys = Object.entries(contagemMotoboy)
+    .map(([motoboyId, total]) => {
+      const motoboy = db.motoboys.find(m => m.id === motoboyId);
+      return { 'Motoboy': motoboy ? motoboy.nome : 'Removido', 'Entregas concluídas': total };
+    })
+    .sort((a,b) => b['Entregas concluídas'] - a['Entregas concluídas']);
+  const planilhaMotoboys = XLSX.utils.json_to_sheet(rankingMotoboys.length ? rankingMotoboys : [{ 'Motoboy': '—', 'Entregas concluídas': 0 }]);
+  planilhaMotoboys['!cols'] = [{wch:24},{wch:20}];
+
+  // --- Aba 3: Ranking Clientes ---
+  const contagemCliente = {};
+  pedidosDoPeriodo.forEach(p => {
+    const nome = nomeCliente(p);
+    contagemCliente[nome] = (contagemCliente[nome] || 0) + 1;
+  });
+  const rankingClientes = Object.entries(contagemCliente)
+    .map(([cliente, total]) => ({ 'Cliente': cliente, 'Pedidos no período': total }))
+    .sort((a,b) => b['Pedidos no período'] - a['Pedidos no período']);
+  const planilhaClientes = XLSX.utils.json_to_sheet(rankingClientes);
+  planilhaClientes['!cols'] = [{wch:28},{wch:18}];
+
+  // --- Aba 4: Ranking Regiões (com detalhe por cliente dentro de cada região) ---
+  const linhasRegiao = [];
+  const contagemRegiao = {};
+  const detalheRegiaoCliente = {};
+  pedidosDoPeriodo.forEach(p => {
+    const local = db.locais.find(l => l.id === p.localId);
+    const regiao = (local && local.regiao && local.regiao.trim()) ? local.regiao.trim() : 'Sem região definida';
+    contagemRegiao[regiao] = (contagemRegiao[regiao] || 0) + 1;
+    const cliente = nomeCliente(p);
+    detalheRegiaoCliente[regiao] = detalheRegiaoCliente[regiao] || {};
+    detalheRegiaoCliente[regiao][cliente] = (detalheRegiaoCliente[regiao][cliente] || 0) + 1;
+  });
+  Object.entries(contagemRegiao)
+    .sort((a,b) => b[1] - a[1])
+    .forEach(([regiao, total]) => {
+      linhasRegiao.push({ 'Região': regiao, 'Cliente': '— TOTAL DA REGIÃO —', 'Pedidos': total });
+      Object.entries(detalheRegiaoCliente[regiao])
+        .sort((a,b) => b[1] - a[1])
+        .forEach(([cliente, totalCliente]) => {
+          linhasRegiao.push({ 'Região': '', 'Cliente': cliente, 'Pedidos': totalCliente });
+        });
+    });
+  const planilhaRegioes = XLSX.utils.json_to_sheet(linhasRegiao);
+  planilhaRegioes['!cols'] = [{wch:20},{wch:28},{wch:12}];
+
   const livro = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(livro, planilha, 'Entregas');
-  XLSX.writeFile(livro, `entregas-${anoMes}.xlsx`);
-  setMsg(msgEl, pedidosDoMes.length + ' entrega(s) exportada(s).', 'ok');
+  XLSX.utils.book_append_sheet(livro, planilhaEntregas, 'Entregas');
+  XLSX.utils.book_append_sheet(livro, planilhaMotoboys, 'Ranking Motoboys');
+  XLSX.utils.book_append_sheet(livro, planilhaClientes, 'Ranking Clientes');
+  XLSX.utils.book_append_sheet(livro, planilhaRegioes, 'Ranking Regiões');
+  XLSX.writeFile(livro, nomeArquivo);
+  setMsg(msgEl, pedidosDoPeriodo.length + ' pedido(s) exportado(s) (período: ' + descricaoPeriodo + ').', 'ok');
 });
 
 // ---------- Perfil ----------
@@ -1116,16 +1379,29 @@ function renderSecaoUnidade(chave){
   const gridHtml = motoboysDaUnidade.length === 0
     ? `<div class="empty-state">Nenhum motoboy registrado na ${UNIDADE_LABEL[chave]} ainda.</div>`
     : `<div class="moto-grid">${motoboysDaUnidade.map(m => {
-        const pedidosAtivos = db.pedidos.filter(p => p.motoboyId === m.id && p.status === 'em_rota').length;
         const rotaAtiva = db.rotas.find(r => r.motoboyId === m.id && r.status === 'em_andamento');
-        const retornoTxt = rotaAtiva && rotaAtiva.previsaoRetorno ? `Chegada prevista ${rotaAtiva.previsaoRetorno}` : (pedidosAtivos > 0 ? pedidosAtivos + ' entrega(s) em andamento' : 'Sem entregas ativas');
+        const viagemAtiva = db.viagens.find(v => v.motoboyId === m.id && v.status === 'em_andamento');
+        let detalheHtml = 'Sem entregas ativas';
+        if (rotaAtiva){
+          const pedidosDaRota = rotaAtiva.pedidoIds.map(pid => db.pedidos.find(p => p.id === pid)).filter(Boolean);
+          const emAberto = pedidosDaRota.filter(p => p.status !== 'entregue');
+          const destinos = emAberto.length > 0
+            ? emAberto.map(p => {
+                const local = db.locais.find(l => l.id === p.localId);
+                return `DAV ${escapeHtml(p.dav)} — ${escapeHtml(local ? local.nome : nomeCliente(p))}`;
+              }).join('<br>')
+            : 'Todas as entregas dessa rota já foram feitas';
+          detalheHtml = `${destinos}<br><span style="color:var(--text-dim);">Saiu às ${rotaAtiva.horaSaida}${rotaAtiva.previsaoRetorno ? ' · chegada prevista ' + rotaAtiva.previsaoRetorno : ''}</span>`;
+        } else if (viagemAtiva){
+          detalheHtml = `${TIPO_VIAGEM_LABEL[viagemAtiva.tipo]} — ${UNIDADE_LABEL[viagemAtiva.origem]} → ${UNIDADE_LABEL[viagemAtiva.destino]}<br><span style="color:var(--text-dim);">Saiu às ${viagemAtiva.horaSaida}${viagemAtiva.previsaoChegada ? ' · chegada prevista ' + viagemAtiva.previsaoChegada : ''}</span>`;
+        }
         return `
           <div class="moto-card">
             <div class="top">
               <span class="name">${escapeHtml(m.nome)}</span>
               <span class="status-badge status-${m.status}">${STATUS_LABEL[m.status]}</span>
             </div>
-            <div class="sub">${retornoTxt}</div>
+            <div class="sub">${detalheHtml}</div>
           </div>
         `;
       }).join('')}</div>`;
@@ -1175,12 +1451,20 @@ function renderPainel(){
 function renderLocaisSelect(){
   const sel = document.getElementById('novo-local');
   const valorAtual = sel.value;
+  const busca = (document.getElementById('busca-local-novo-pedido').value || '').trim().toLowerCase();
+  const locaisFiltrados = busca
+    ? db.locais.filter(l => l.nome.toLowerCase().includes(busca) || l.endereco.toLowerCase().includes(busca))
+    : db.locais;
   if (db.locais.length === 0){
     sel.innerHTML = `<option value="">Nenhum / a definir depois</option>`;
     return;
   }
+  if (locaisFiltrados.length === 0){
+    sel.innerHTML = `<option value="">Nenhum resultado para "${escapeHtml(busca)}"</option>`;
+    return;
+  }
   const grupos = {};
-  db.locais.forEach(l => {
+  locaisFiltrados.forEach(l => {
     const chave = (l.regiao || '').trim() || 'Sem região definida';
     if (!grupos[chave]) grupos[chave] = [];
     grupos[chave].push(l);
@@ -1191,9 +1475,10 @@ function renderLocaisSelect(){
       ${grupos[chave].map(l => `<option value="${l.id}">${escapeHtml(l.nome)} — ${escapeHtml(l.endereco)}</option>`).join('')}
     </optgroup>
   `).join('');
-  if (db.locais.some(l => l.id === valorAtual)) sel.value = valorAtual;
+  if (locaisFiltrados.some(l => l.id === valorAtual)) sel.value = valorAtual;
   else sel.value = '';
 }
+document.getElementById('busca-local-novo-pedido').addEventListener('input', renderLocaisSelect);
 function renderMotoboyFiltro(){
   const sel = document.getElementById('filtro-motoboy');
   const current = sel.value;
@@ -1205,6 +1490,33 @@ function renderMotoboyFiltro(){
     ? db.motoboys.map(m => `<option value="${m.id}">${escapeHtml(m.nome)} (${STATUS_LABEL[m.status]})</option>`).join('')
     : `<option value="">Cadastre um motoboy primeiro</option>`;
   if (current2 && db.motoboys.some(m => m.id === current2)) sel2.value = current2;
+
+  const sel3 = document.getElementById('viagem-motoboy');
+  const current3 = sel3.value;
+  sel3.innerHTML = db.motoboys.length
+    ? db.motoboys.map(m => `<option value="${m.id}">${escapeHtml(m.nome)} (${STATUS_LABEL[m.status]})</option>`).join('')
+    : `<option value="">Cadastre um motoboy primeiro</option>`;
+  if (current3 && db.motoboys.some(m => m.id === current3)) sel3.value = current3;
+}
+
+document.getElementById('viagem-origem').addEventListener('change', atualizarDestinoViagem);
+function atualizarDestinoViagem(){
+  const origem = document.getElementById('viagem-origem').value;
+  const destino = origem === 'matriz' ? 'filial' : 'matriz';
+  document.getElementById('viagem-destino-label').textContent = UNIDADE_LABEL[destino];
+}
+document.getElementById('viagem-tipo').addEventListener('change', (e) => {
+  document.getElementById('campo-viagem-pedido').style.display = e.target.value === 'transferencia_dav' ? 'block' : 'none';
+  renderPedidosParaViagem();
+});
+document.getElementById('viagem-origem').addEventListener('change', renderPedidosParaViagem);
+function renderPedidosParaViagem(){
+  const sel = document.getElementById('viagem-pedido');
+  const origem = document.getElementById('viagem-origem').value;
+  const elegiveis = db.pedidos.filter(p => p.status === 'pendente' && unidadeResponsavel(p) === origem);
+  sel.innerHTML = elegiveis.length
+    ? elegiveis.map(p => `<option value="${p.id}">DAV ${escapeHtml(p.dav)} — ${escapeHtml(nomeCliente(p))}</option>`).join('')
+    : `<option value="">Nenhum pedido pendente dessa unidade</option>`;
 }
 
 let editandoPedidoId = null;
@@ -1320,6 +1632,9 @@ document.getElementById('btn-buscar-dav').addEventListener('click', () => {
           <div class="t2">${motoboy ? 'Motoboy: ' + escapeHtml(motoboy.nome) : 'Ainda sem motoboy atribuído'}</div>
           <div class="t2">${pedido.horaSaida ? 'Saiu em: ' + pedido.horaSaida : ''}${pedido.horaEntrega ? ' · Entregue em: ' + pedido.horaEntrega : ''}</div>
           ${pedido.observacao ? `<div class="t2" style="color:var(--amber);">Obs: ${escapeHtml(pedido.observacao)}</div>` : ''}
+          ${pedido.transferenciaHistorico && pedido.transferenciaHistorico.length ? pedido.transferenciaHistorico.map(h =>
+            `<div class="t2" style="color:#9aa3ff;">🔄 Levado de ${UNIDADE_LABEL[h.origem]} para ${UNIDADE_LABEL[h.destino]} por ${escapeHtml(h.motoboyNome)} em ${h.data}</div>`
+          ).join('') : ''}
         </div>
         <span class="status-badge status-${pedido.status}">${STATUS_LABEL[pedido.status]}</span>
       </div>
@@ -1330,13 +1645,29 @@ document.getElementById('btn-buscar-dav').addEventListener('click', () => {
 document.getElementById('filtro-status').addEventListener('change', renderPedidosTabela);
 document.getElementById('montar-filtro-resp').addEventListener('change', renderMontarRota);
 document.getElementById('filtro-motoboy').addEventListener('change', renderPedidosTabela);
+document.getElementById('filtro-regiao-pedido').addEventListener('change', renderPedidosTabela);
 
 function renderPedidosTabela(){
   const statusF = document.getElementById('filtro-status').value;
   const motoF = document.getElementById('filtro-motoboy').value;
+  const regiaoF = document.getElementById('filtro-regiao-pedido').value;
+
+  // Preenche as opções do filtro de região com as regiões já cadastradas
+  const selRegiao = document.getElementById('filtro-regiao-pedido');
+  const regiaoAtual = selRegiao.value;
+  const regioes = [...new Set(db.locais.map(l => (l.regiao || '').trim()).filter(Boolean))].sort();
+  selRegiao.innerHTML = `<option value="todas">Todas</option>` + regioes.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
+  if (regioes.includes(regiaoAtual)) selRegiao.value = regiaoAtual;
+
   let lista = [...db.pedidos];
   if (statusF !== 'todos') lista = lista.filter(p => p.status === statusF);
   if (motoF !== 'todos') lista = lista.filter(p => p.motoboyId === motoF);
+  if (selRegiao.value !== 'todas'){
+    lista = lista.filter(p => {
+      const local = db.locais.find(l => l.id === p.localId);
+      return local && (local.regiao || '').trim() === selRegiao.value;
+    });
+  }
   lista.sort((a,b) => (b.criadoEm || '').localeCompare(a.criadoEm || ''));
 
   const wrap = document.getElementById('pedidos-tabela');
